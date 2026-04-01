@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { AuthConfig, AuthOAuth2 } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
 import { VariableInput } from "./VariableHighlight";
+import { Select } from "./Select";
 import { v4 as uuidv4 } from "uuid";
 
 interface AuthEditorProps {
@@ -462,17 +463,12 @@ function OAuth2Editor({
         <label className="block text-xs text-text-muted mb-1">
           Grant Type
         </label>
-        <select
+        <Select
           value={auth.grantType}
-          onChange={(e) => update({ grantType: e.target.value })}
-          className="w-full bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
-        >
-          {GRANT_TYPES.map((g) => (
-            <option key={g.value} value={g.value}>
-              {g.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => update({ grantType: v })}
+          options={GRANT_TYPES.map((g) => ({ value: g.value, label: g.label }))}
+          className="w-full"
+        />
       </div>
 
       {/* Config fields */}
@@ -664,22 +660,21 @@ export function AuthEditor({
     <div className="space-y-3">
       <div>
         <label className="block text-xs text-text-muted mb-1">Auth Type</label>
-        <select
+        <Select
           value={authType}
-          onChange={(e) => handleTypeChange(e.target.value)}
-          className="bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent w-56"
-        >
-          {collectionAuth && (
-            <option value="inherit">
-              Inherit from collection ({collectionAuth.type})
-            </option>
-          )}
-          <option value="none">No Auth</option>
-          <option value="bearer">Bearer Token</option>
-          <option value="basic">Basic Auth</option>
-          <option value="apikey">API Key</option>
-          <option value="oauth2">OAuth 2.0</option>
-        </select>
+          onChange={handleTypeChange}
+          options={[
+            ...(collectionAuth
+              ? [{ value: "inherit", label: `Inherit from collection (${collectionAuth.type})` }]
+              : []),
+            { value: "none", label: "No Auth" },
+            { value: "bearer", label: "Bearer Token" },
+            { value: "basic", label: "Basic Auth" },
+            { value: "apikey", label: "API Key" },
+            { value: "oauth2", label: "OAuth 2.0" },
+          ]}
+          className="w-56"
+        />
       </div>
 
       {/* Inherit notice */}
@@ -757,19 +752,19 @@ export function AuthEditor({
             <label className="block text-xs text-text-muted mb-1">
               Add to
             </label>
-            <select
+            <Select
               value={auth.in}
-              onChange={(e) =>
+              onChange={(v) =>
                 onChange({
                   ...auth,
-                  in: e.target.value as "header" | "query",
+                  in: v as "header" | "query",
                 })
               }
-              className="bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
-            >
-              <option value="header">Header</option>
-              <option value="query">Query Parameter</option>
-            </select>
+              options={[
+                { value: "header", label: "Header" },
+                { value: "query", label: "Query Parameter" },
+              ]}
+            />
           </div>
         </div>
       )}

@@ -10,6 +10,7 @@ import { VariableInput } from "./VariableHighlight";
 import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
 import type { RequestFile } from "@/lib/types";
 import { parseCurl } from "@/lib/curl-parser";
+import { Select } from "./Select";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 
@@ -146,17 +147,12 @@ export function RequestEditor() {
     <div className="flex flex-col h-full">
       {/* URL Bar */}
       <div className="flex items-center gap-2 p-3 border-b border-border">
-        <select
+        <Select
           value={localRequest.request.method}
-          onChange={(e) => updateRequestDef({ method: e.target.value })}
-          className={`bg-bg-secondary border border-border rounded px-2 py-2 text-sm font-bold outline-none focus:border-accent w-28 ${METHOD_COLORS[localRequest.request.method] || ""}`}
-        >
-          {METHODS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => updateRequestDef({ method: v })}
+          options={METHODS.map((m) => ({ value: m, label: m }))}
+          className={`w-28 font-bold ${METHOD_COLORS[localRequest.request.method] || ""}`}
+        />
 
         <VariableInput
           value={localRequest.request.url}

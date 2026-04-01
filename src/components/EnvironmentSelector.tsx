@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { EnvironmentEditor } from "./EnvironmentEditor";
+import { Select } from "./Select";
 
 export function EnvironmentSelector() {
   const { environments, selectedEnvironmentId, setSelectedEnvironmentId } =
@@ -12,18 +13,18 @@ export function EnvironmentSelector() {
   return (
     <>
       <div className="flex items-center gap-1.5">
-        <select
+        <Select
           value={selectedEnvironmentId || ""}
-          onChange={(e) => setSelectedEnvironmentId(e.target.value || null)}
-          className="flex-1 bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent appearance-none cursor-pointer"
-        >
-          <option value="">No Environment</option>
-          {environments.map((env) => (
-            <option key={env.id} value={env.id}>
-              {env.meta.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setSelectedEnvironmentId(v || null)}
+          options={[
+            { value: "", label: "No Environment" },
+            ...environments.map((env) => ({
+              value: env.id,
+              label: env.meta.name,
+            })),
+          ]}
+          className="flex-1"
+        />
         <button
           onClick={() => setShowEditor(true)}
           className="text-text-muted hover:text-accent px-1.5 py-1.5 rounded hover:bg-bg-hover transition-colors flex-shrink-0"

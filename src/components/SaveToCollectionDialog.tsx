@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/stores/app-store";
 import type { RequestFile } from "@/lib/types";
+import { Select } from "./Select";
 
 interface SaveToCollectionDialogProps {
   open: boolean;
@@ -173,18 +174,19 @@ export function SaveToCollectionDialog({
             </div>
 
             {mode === "existing" ? (
-              <select
+              <Select
                 value={selectedCollectionId}
-                onChange={(e) => setSelectedCollectionId(e.target.value)}
-                className="w-full bg-bg-secondary border border-border rounded px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
-              >
-                <option value="">Select a collection...</option>
-                {collections.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.meta.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedCollectionId}
+                placeholder="Select a collection..."
+                options={[
+                  { value: "", label: "Select a collection..." },
+                  ...collections.map((col) => ({
+                    value: col.id,
+                    label: col.meta.name,
+                  })),
+                ]}
+                className="w-full"
+              />
             ) : (
               <input
                 type="text"
