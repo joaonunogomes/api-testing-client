@@ -25,7 +25,8 @@ ENV PORT=3000
 # Copy standalone output
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public 2>/dev/null || true
+RUN --mount=from=builder,source=/app/public,target=/tmp/public \
+    cp -r /tmp/public ./public 2>/dev/null || true
 
 EXPOSE 3000
 VOLUME /workspace

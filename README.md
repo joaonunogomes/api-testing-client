@@ -9,10 +9,14 @@ Run it as a Docker container and open it in your browser. No accounts, no cloud 
 - **File-based storage** — Collections, requests, and environments are YAML files on disk
 - **Git-friendly** — Human-readable diffs, branch per feature, PR reviews for API changes
 - **Environments** — Switch between dev/staging/prod with variable substitution (`{{baseUrl}}`)
-- **Authentication** — Basic, Bearer, API Key (OAuth 2.0 and AWS Sig v4 coming soon)
+- **Authentication** — Basic, Bearer, API Key, and OAuth 2.0 (Authorization Code, PKCE, Client Credentials, Password, Refresh Token)
 - **Variable substitution** — Use `{{variables}}` in URLs, headers, body, and auth fields
-- **Built-in dynamic variables** — `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`
-- **Live reload** — Edit YAML files in your editor and the UI updates instantly via WebSocket
+- **Built-in dynamic variables** — `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`, `{{$randomCompanyName}}`
+- **Pre-request & post-response scripts** — JavaScript scripts with test assertions via `bru.test()`
+- **Postman import** — Import Postman collections (v2.1) and environments, converted to native YAML
+- **Live reload** — Edit YAML files in your editor and the UI updates instantly via Server-Sent Events
+- **Multi-tab interface** — Open multiple requests in tabs with drag-to-reorder
+- **cURL generation** — Generate cURL commands from any request
 - **Docker-first** — Single container, mount your workspace as a volume
 - **No database** — Everything lives in files. Back up by pushing to git.
 
@@ -40,22 +44,18 @@ docker run -p 3000:3000 -v /path/to/your/workspace:/workspace api-client
 # Install dependencies
 pnpm install
 
-# Start backend (serves API on port 3000)
+# Start development server
 WORKSPACE_DIR=$(pwd)/workspace-example pnpm dev
-
-# In another terminal — start frontend dev server (port 5173, proxies to backend)
-pnpm dev:frontend
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Open [http://localhost:3000](http://localhost:3000).
 
 ### Production Build
 
 ```bash
 pnpm build
+pnpm start
 ```
-
-This builds all three packages. The frontend is compiled to `packages/frontend/dist/` and can be served as static files by the backend.
 
 ## Workspace Structure
 
@@ -214,22 +214,14 @@ auth:
   value: "{{apiKey}}"
   in: header                      # header | query
 
-# OAuth 2.0 (coming in Phase 2)
+# OAuth 2.0
 auth:
   type: oauth2
-  grantType: client_credentials
+  grantType: client_credentials   # authorization_code | authorization_code_pkce | client_credentials | password | refresh_token
   tokenUrl: "{{tokenUrl}}"
   clientId: "{{clientId}}"
   clientSecret: "{{clientSecret}}"
   scope: "read write"
-
-# AWS Signature v4 (coming in Phase 2)
-auth:
-  type: awsv4
-  accessKey: "{{awsAccessKey}}"
-  secretKey: "{{awsSecretKey}}"
-  region: "{{awsRegion}}"
-  service: execute-api
 ```
 
 ## Variable Substitution
@@ -251,7 +243,8 @@ Variables are resolved in URLs, headers, body content, and auth fields using `{{
 | `{{$guid}}` | UUID v4 | `a1b2c3d4-e5f6-...` |
 | `{{$timestamp}}` | Unix timestamp (seconds) | `1774907045` |
 | `{{$isoTimestamp}}` | ISO 8601 datetime | `2026-03-30T21:44:05.123Z` |
-| `{{$randomInt}}` | Random integer (0–999999) | `482910` |
+| `{{$randomInt}}` | Random integer (0-999999) | `482910` |
+| `{{$randomCompanyName}}` | Random company name | `Acme Corp` |
 
 Variables can reference other variables (recursive resolution with cycle detection):
 
@@ -262,15 +255,14 @@ variables:
   baseUrl: "{{protocol}}://{{host}}"    # Resolves to https://api.example.com
 ```
 
-## Scripting (Phase 2 — Coming Soon)
+## Scripting
 
-Pre-request and post-response scripts run in a sandboxed JavaScript environment (quickjs-emscripten). Scripts can read/write variables, inspect requests and responses, and run test assertions.
+Pre-request and post-response scripts run in a sandboxed JavaScript environment. Scripts can read/write variables, inspect requests and responses, and run test assertions.
 
 ```yaml
 scripts:
   pre-request: |
     bru.setVar("startTime", Date.now());
-    req.setHeader("X-Custom", "value");
 
   post-response: |
     const data = res.json();
@@ -302,6 +294,14 @@ scripts:
 | `res.headers` | Response headers |
 | `console.log/warn/error` | Output captured and shown in UI |
 
+## Importing from Postman
+
+You can import Postman collections (v2.1 format) and environments directly from the UI. The importer converts them to native YAML files in your workspace.
+
+1. Click the **Import** button in the sidebar
+2. Select a Postman collection or environment JSON file
+3. The collection and its requests are converted to YAML and saved to your workspace
+
 ## API Reference
 
 The backend exposes a REST API that the frontend consumes. You can also use it programmatically.
@@ -321,7 +321,10 @@ The backend exposes a REST API that the frontend consumes. You can also use it p
 | `PUT` | `/api/environments/:id` | Update an environment |
 | `DELETE` | `/api/environments/:id` | Delete an environment |
 | `POST` | `/api/execute` | Execute a request |
-| `WS` | `/ws` | WebSocket for live file change events |
+| `POST` | `/api/import` | Import a Postman collection or environment |
+| `POST` | `/api/oauth2/token` | OAuth 2.0 token exchange |
+| `GET` | `/api/oauth2/callback` | OAuth 2.0 callback handler |
+| `GET` | `/api/events` | Server-Sent Events for live file changes |
 
 ### Execute a request
 
@@ -340,7 +343,7 @@ curl -X POST http://localhost:3000/api/execute \
 ```
 ┌─────────────────────────────────────────────────┐
 │                   Browser UI                     │
-│              (React + Zustand + Vite)            │
+│           (Next.js + React + Zustand)            │
 │                                                  │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────┐  │
 │  │ Sidebar  │  │Request Editor│  │ Response   │  │
@@ -348,9 +351,9 @@ curl -X POST http://localhost:3000/api/execute \
 │  │  Tree    │  │Body/Auth     │  │ Timing     │  │
 │  └──────────┘  └──────────────┘  └───────────┘  │
 └──────────────────────┬──────────────────────────┘
-                       │ HTTP + WebSocket
+                       │ HTTP + SSE
 ┌──────────────────────┴──────────────────────────┐
-│                  Backend (Hono)                   │
+│              Next.js API Routes                   │
 │                                                  │
 │  ┌────────────┐  ┌────────────┐  ┌───────────┐  │
 │  │ REST API   │  │  Executor  │  │   File     │  │
@@ -370,23 +373,9 @@ curl -X POST http://localhost:3000/api/execute \
 
 **Key design decisions:**
 - Requests execute server-side — no CORS issues
-- File watcher broadcasts changes via WebSocket — edit YAML in VS Code and the UI updates live
+- File watcher broadcasts changes via SSE — edit YAML in VS Code and the UI updates live
 - IDs are file paths (e.g., `petstore/list-pets`) — stable, human-readable, no UUIDs
 - No database — the filesystem is the source of truth
-
-## Project Structure
-
-```
-api-client/
-├── packages/
-│   ├── shared/          # Types, Zod schemas, variable substitution
-│   ├── backend/         # Hono server, routes, services, file watcher
-│   └── frontend/        # React SPA, Zustand stores, components
-├── workspace-example/   # Example workspace shipped with the project
-├── Dockerfile           # Multi-stage production build
-├── docker-compose.yml   # Mount workspace and run
-└── pnpm-workspace.yaml  # Monorepo config
-```
 
 ## Docker
 
