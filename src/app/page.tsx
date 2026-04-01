@@ -12,6 +12,33 @@ export default function Home() {
   const [responseHeight, setResponseHeight] = useState(300);
   const [isDragging, setIsDragging] = useState(false);
 
+  const { closeTab, activeTabId } = useAppStore();
+
+  // Cmd+W / Ctrl+W closes the active tab instead of the window
+  useEffect(() => {
+    const closeActiveTab = () => {
+      const tabId = useAppStore.getState().activeTabId;
+      if (tabId) {
+        useAppStore.getState().closeTab(tabId);
+      }
+    };
+
+    // Handle from keyboard directly (works in browser/dev mode)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "w") {
+        e.preventDefault();
+        closeActiveTab();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    // Handle from Electron menu IPC (packaged app)
+    const electron = (window as unknown as { electron?: { onCloseTab?: (cb: () => void) => void } }).electron;
+    electron?.onCloseTab?.(() => closeActiveTab());
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   useEffect(() => {
     fetchCollections();
     fetchEnvironments();
