@@ -42,6 +42,12 @@ interface LinksFile {
   envLinks?: { id: string; path: string }[];
 }
 
+/** Resolve a link path — relative paths are resolved against the workspace dir */
+function resolveLinkPath(linkPath: string): string {
+  if (path.isAbsolute(linkPath)) return linkPath;
+  return path.resolve(getWorkspaceDir(), linkPath);
+}
+
 async function getLinks(): Promise<LinksFile> {
   const linksPath = path.join(getWorkspaceDir(), "links.yaml");
   try {
@@ -78,9 +84,10 @@ export async function copyAndLink(
   targetPath: string,
 ): Promise<void> {
   const sourceDir = path.join(getCollectionsDir(), collectionId);
+  const resolvedTarget = resolveLinkPath(targetPath);
 
   // Ensure target exists
-  await fs.mkdir(targetPath, { recursive: true });
+  await fs.mkdir(resolvedTarget, { recursive: true });
 
   // Recursively copy all files from source to target
   async function copyDir(src: string, dest: string) {
@@ -100,11 +107,10 @@ export async function copyAndLink(
 
   // Only copy if source exists and is different from target
   const resolvedSource = path.resolve(sourceDir);
-  const resolvedTarget = path.resolve(targetPath);
   if (resolvedSource !== resolvedTarget) {
     try {
       await fs.access(sourceDir);
-      await copyDir(sourceDir, targetPath);
+      await copyDir(sourceDir, resolvedTarget);
       // Remove the original local copy
       await fs.rm(sourceDir, { recursive: true, force: true });
     } catch {
@@ -112,7 +118,7 @@ export async function copyAndLink(
     }
   }
 
-  // Create the link
+  // Create the link — store the original path (may be relative)
   await addLink(collectionId, targetPath);
 }
 
@@ -149,19 +155,22 @@ export async function copyAndLinkEnvironment(
   targetPath: string,
 ): Promise<void> {
   const envDir = getEnvironmentsDir();
+  const resolvedTarget = resolveLinkPath(targetPath);
 
   // Ensure target exists
-  await fs.mkdir(targetPath, { recursive: true });
+  await fs.mkdir(resolvedTarget, { recursive: true });
 
   const resolvedSource = path.resolve(envDir);
-  const resolvedTarget = path.resolve(targetPath);
 
   if (resolvedSource !== resolvedTarget) {
     // Copy env file
     const envFile = path.join(envDir, `${envId}.env.yaml`);
     try {
       await fs.access(envFile);
-      await fs.copyFile(envFile, path.join(targetPath, `${envId}.env.yaml`));
+      await fs.copyFile(
+        envFile,
+        path.join(resolvedTarget, `${envId}.env.yaml`),
+      );
       await fs.unlink(envFile);
     } catch {
       // Source doesn't exist — target may already have files
@@ -173,7 +182,7 @@ export async function copyAndLinkEnvironment(
       await fs.access(secretsFile);
       await fs.copyFile(
         secretsFile,
-        path.join(targetPath, `${envId}.env.secrets.yaml`),
+        path.join(resolvedTarget, `${envId}.env.secrets.yaml`),
       );
       await fs.unlink(secretsFile);
     } catch {
@@ -181,6 +190,7 @@ export async function copyAndLinkEnvironment(
     }
   }
 
+  // Store the original path (may be relative)
   await addEnvLink(envId, targetPath);
 }
 
@@ -196,9 +206,10 @@ async function resolveEnvironmentDir(id: string): Promise<string> {
   const links = await getLinks();
   const link = (links.envLinks || []).find((l) => l.id === id);
   if (link) {
+    const resolved = resolveLinkPath(link.path);
     try {
-      await fs.access(link.path);
-      return link.path;
+      await fs.access(resolved);
+      return resolved;
     } catch {
       // linked path doesn't exist, fall through
     }
@@ -211,9 +222,10 @@ async function resolveCollectionDir(id: string): Promise<string | null> {
   const links = await getLinks();
   const link = links.links.find((l) => l.id === id);
   if (link) {
+    const resolved = resolveLinkPath(link.path);
     try {
-      await fs.access(link.path);
-      return link.path;
+      await fs.access(resolved);
+      return resolved;
     } catch {
       // linked path doesn't exist, fall through
     }
@@ -334,8 +346,9 @@ export async function listCollections(): Promise<Collection[]> {
   const links = await getLinks();
   for (const link of links.links) {
     try {
-      await fs.access(link.path);
-      const col = await loadCollectionFromDir(link.path, link.id, link.path);
+      const resolved = resolveLinkPath(link.path);
+      await fs.access(resolved);
+      const col = await loadCollectionFromDir(resolved, link.id, resolved);
       collections.push(col);
       seenIds.add(link.id);
     } catch {
@@ -455,13 +468,14 @@ export async function listEnvironments(): Promise<Environment[]> {
   const links = await getLinks();
   for (const envLink of links.envLinks || []) {
     try {
-      await fs.access(envLink.path);
-      const filePath = path.join(envLink.path, `${envLink.id}.env.yaml`);
+      const resolved = resolveLinkPath(envLink.path);
+      await fs.access(resolved);
+      const filePath = path.join(resolved, `${envLink.id}.env.yaml`);
       const envFile = await readYaml<EnvironmentFile>(filePath);
 
       let secrets: Record<string, string> = {};
       const secretsPath = path.join(
-        envLink.path,
+        resolved,
         `${envLink.id}.env.secrets.yaml`,
       );
       try {
@@ -476,7 +490,7 @@ export async function listEnvironments(): Promise<Environment[]> {
         meta: envFile.meta || { name: envLink.id },
         variables: envFile.variables || {},
         secrets: { ...(envFile.secrets || {}), ...secrets },
-        linkedPath: envLink.path,
+        linkedPath: resolved,
       });
       seenIds.add(envLink.id);
     } catch {

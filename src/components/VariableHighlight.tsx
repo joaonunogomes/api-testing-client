@@ -174,6 +174,7 @@ export function VariableInput({
   collectionId,
   className = "",
   onKeyDown,
+  onPaste,
   wrapperClassName = "",
 }: {
   value: string;
@@ -182,6 +183,7 @@ export function VariableInput({
   collectionId: string | null;
   className?: string;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void;
   wrapperClassName?: string;
 }) {
   const hasVars = value.includes("{{");
@@ -199,6 +201,7 @@ export function VariableInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className={`w-full ${className} ${showOverlay ? "text-transparent caret-text-primary" : ""}`}

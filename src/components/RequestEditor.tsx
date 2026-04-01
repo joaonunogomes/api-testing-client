@@ -9,6 +9,7 @@ import { ScriptsEditor } from "./ScriptsEditor";
 import { VariableInput } from "./VariableHighlight";
 import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
 import type { RequestFile } from "@/lib/types";
+import { parseCurl } from "@/lib/curl-parser";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 
@@ -90,6 +91,32 @@ export function RequestEditor() {
     });
   };
 
+  const handlePasteCurl = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    const parsed = parseCurl(text);
+    if (parsed) {
+      e.preventDefault();
+      updateRequest({
+        request: {
+          ...localRequest.request,
+          method: parsed.method,
+          url: parsed.url,
+          ...(parsed.params ? { params: parsed.params } : {}),
+          ...(parsed.headers
+            ? {
+                headers: {
+                  ...localRequest.request.headers,
+                  ...parsed.headers,
+                },
+              }
+            : {}),
+          ...(parsed.body ? { body: parsed.body } : {}),
+          ...(parsed.auth ? { auth: parsed.auth } : {}),
+        },
+      });
+    }
+  };
+
   const isTemporary = !tab.collectionId;
   const handleSave = () => {
     if (isTemporary) {
@@ -138,6 +165,7 @@ export function RequestEditor() {
           collectionId={tab.collectionId}
           wrapperClassName="flex-1"
           className="bg-bg-secondary border border-border rounded px-3 py-2 text-sm text-text-primary outline-none focus:border-accent font-mono"
+          onPaste={handlePasteCurl}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               handleSend();
