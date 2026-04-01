@@ -33,6 +33,7 @@ function formatSize(bytes: number): string {
 export function ResponseViewer() {
   const { openTabs, activeTabId } = useAppStore();
   const [activeTab, setActiveTab] = useState<ResponseTab>("body");
+  const [copiedCurl, setCopiedCurl] = useState(false);
 
   const tab = openTabs.find((t) => t.id === activeTabId);
   const response = tab?.response ?? null;
@@ -80,13 +81,15 @@ export function ResponseViewer() {
     });
   }
 
-  if (response.consoleOutput && response.consoleOutput.length > 0) {
-    tabs.push({
-      id: "console",
-      label: "Console",
-      badge: String(response.consoleOutput.length),
-    });
-  }
+  // Always show Console tab
+  tabs.push({ id: "console", label: "Console" });
+
+  const handleCopyCurl = async () => {
+    if (!response.curl) return;
+    await navigator.clipboard.writeText(response.curl);
+    setCopiedCurl(true);
+    setTimeout(() => setCopiedCurl(false), 2000);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -173,10 +176,46 @@ export function ResponseViewer() {
           </div>
         )}
 
-        {activeTab === "console" && response.consoleOutput && (
-          <pre className="p-3 text-sm font-mono text-text-secondary whitespace-pre-wrap">
-            {response.consoleOutput.join("\n")}
-          </pre>
+        {activeTab === "console" && (
+          <div className="p-3 space-y-4">
+            {/* Curl section */}
+            {response.curl && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-medium text-text-muted uppercase tracking-wide">
+                    cURL
+                  </span>
+                  <button
+                    onClick={handleCopyCurl}
+                    className="text-xs text-text-muted hover:text-accent transition-colors"
+                  >
+                    {copiedCurl ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <pre className="text-sm font-mono text-text-secondary bg-bg-tertiary border border-border rounded p-3 whitespace-pre-wrap break-all">
+                  {response.curl}
+                </pre>
+              </div>
+            )}
+
+            {/* Logs section */}
+            {response.consoleOutput && response.consoleOutput.length > 0 && (
+              <div>
+                <span className="text-xs font-medium text-text-muted uppercase tracking-wide block mb-1.5">
+                  Logs
+                </span>
+                <pre className="text-sm font-mono text-text-secondary bg-bg-tertiary border border-border rounded p-3 whitespace-pre-wrap">
+                  {response.consoleOutput.join("\n")}
+                </pre>
+              </div>
+            )}
+
+            {!response.curl && (!response.consoleOutput || response.consoleOutput.length === 0) && (
+              <div className="text-sm text-text-muted">
+                No console output
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

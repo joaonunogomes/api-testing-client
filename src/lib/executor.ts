@@ -163,6 +163,31 @@ function runScript(
   return { testResults, consoleOutput };
 }
 
+function buildCurl(
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  body?: string,
+): string {
+  const parts: string[] = ["curl"];
+
+  if (method !== "GET") {
+    parts.push(`-X ${method}`);
+  }
+
+  parts.push(`'${url.replace(/'/g, "'\\''")}'`);
+
+  for (const [key, value] of Object.entries(headers)) {
+    parts.push(`-H '${key}: ${value.replace(/'/g, "'\\''")}'`);
+  }
+
+  if (body) {
+    parts.push(`-d '${body.replace(/'/g, "'\\''")}'`);
+  }
+
+  return parts.join(" \\\n  ");
+}
+
 export async function executeRequest(
   requestFile: RequestFile,
   collection: Collection | null,
@@ -278,6 +303,19 @@ export async function executeRequest(
     }
   }
 
+  // Generate curl command
+  const sendBody =
+    requestFile.request.method !== "GET" &&
+    requestFile.request.method !== "HEAD"
+      ? body
+      : undefined;
+  const curl = buildCurl(
+    requestFile.request.method,
+    url.toString(),
+    headers,
+    sendBody,
+  );
+
   // Execute request
   const startTime = performance.now();
   let response: Response;
@@ -285,11 +323,7 @@ export async function executeRequest(
     response = await fetch(url.toString(), {
       method: requestFile.request.method,
       headers,
-      body:
-        requestFile.request.method !== "GET" &&
-        requestFile.request.method !== "HEAD"
-          ? body
-          : undefined,
+      body: sendBody,
     });
   } catch (e: unknown) {
     return {
@@ -300,6 +334,7 @@ export async function executeRequest(
       time: Math.round(performance.now() - startTime),
       size: 0,
       consoleOutput: allConsoleOutput,
+      curl,
     };
   }
 
@@ -348,5 +383,6 @@ export async function executeRequest(
     size: new TextEncoder().encode(responseBody).length,
     testResults: allTestResults.length > 0 ? allTestResults : undefined,
     consoleOutput: allConsoleOutput.length > 0 ? allConsoleOutput : undefined,
+    curl,
   };
 }

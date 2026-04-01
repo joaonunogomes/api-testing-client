@@ -7,3 +7,4 @@ out/
 .history/
 .DS_Store
 *.tsbuildinfo
+workspace-example/

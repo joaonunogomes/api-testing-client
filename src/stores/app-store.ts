@@ -47,6 +47,7 @@ interface AppState {
   setOAuth2Token: (collectionId: string, token: OAuth2TokenState) => void;
 
   // Tab actions
+  openNewTab: () => void;
   openRequest: (collectionId: string, requestId: string) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
@@ -101,6 +102,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   // --- Tab actions ---
+
+  openNewTab: () => {
+    const id = `__new__${Date.now()}`;
+    set((s) => ({
+      openTabs: [
+        ...s.openTabs,
+        {
+          id,
+          collectionId: "",
+          requestId: "",
+          label: "Untitled Request",
+          method: "GET",
+          request: {
+            meta: { name: "Untitled Request" },
+            request: {
+              method: "GET",
+              url: "",
+            },
+          },
+          response: null,
+          isExecuting: false,
+          isDirty: false,
+        },
+      ],
+      activeTabId: id,
+    }));
+  },
 
   openRequest: async (collectionId, requestId) => {
     const tabId = makeTabId(collectionId, requestId);

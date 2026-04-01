@@ -7,6 +7,7 @@ import { BodyEditor } from "./BodyEditor";
 import { AuthEditor } from "./AuthEditor";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { VariableInput } from "./VariableHighlight";
+import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
 import type { RequestFile } from "@/lib/types";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
@@ -34,6 +35,7 @@ export function RequestEditor() {
   } = useAppStore();
 
   const [activeEditorTab, setActiveEditorTab] = useState<Tab>("params");
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const tab = openTabs.find((t) => t.id === activeTabId);
 
@@ -88,7 +90,14 @@ export function RequestEditor() {
     });
   };
 
-  const handleSave = () => saveTab(tab.id);
+  const isTemporary = !tab.collectionId;
+  const handleSave = () => {
+    if (isTemporary) {
+      setShowSaveDialog(true);
+    } else {
+      saveTab(tab.id);
+    }
+  };
   const handleSend = () => executeTab(tab.id);
 
   const paramPairs = Object.entries(localRequest.request.params || {}).map(
@@ -147,9 +156,9 @@ export function RequestEditor() {
         <button
           onClick={handleSave}
           className="text-text-muted hover:text-text-primary px-3 py-2 text-sm border border-border rounded hover:border-border-light transition-colors"
-          title="Save (without sending)"
+          title={isTemporary ? "Save to collection" : "Save (without sending)"}
         >
-          Save
+          {isTemporary ? "Save to..." : "Save"}
         </button>
       </div>
 
@@ -234,6 +243,15 @@ export function RequestEditor() {
           />
         )}
       </div>
+
+      {showSaveDialog && localRequest && (
+        <SaveToCollectionDialog
+          open={showSaveDialog}
+          onClose={() => setShowSaveDialog(false)}
+          request={localRequest}
+          tabId={tab.id}
+        />
+      )}
     </div>
   );
 }

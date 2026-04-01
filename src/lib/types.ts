@@ -120,6 +120,7 @@ export interface Environment {
   meta: { name: string };
   variables: Record<string, string>;
   secrets: Record<string, string>;
+  linkedPath?: string;
 }
 
 export interface ExecuteRequest {
@@ -137,6 +138,7 @@ export interface ExecuteResponse {
   size: number;
   testResults?: TestResult[];
   consoleOutput?: string[];
+  curl?: string;
 }
 
 export interface TestResult {

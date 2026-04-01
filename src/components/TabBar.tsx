@@ -74,7 +74,7 @@ function Tab({ tab, isActive }: { tab: OpenTab; isActive: boolean }) {
 }
 
 export function TabBar() {
-  const { openTabs, activeTabId } = useAppStore();
+  const { openTabs, activeTabId, openNewTab } = useAppStore();
 
   if (openTabs.length === 0) return null;
 
@@ -83,6 +83,13 @@ export function TabBar() {
       {openTabs.map((tab) => (
         <Tab key={tab.id} tab={tab} isActive={tab.id === activeTabId} />
       ))}
+      <button
+        onClick={openNewTab}
+        className="flex items-center justify-center w-8 h-8 my-auto text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors rounded flex-shrink-0 mx-1 text-sm"
+        title="New Request"
+      >
+        +
+      </button>
     </div>
   );
 }

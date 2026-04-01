@@ -29,6 +29,10 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newEnvName, setNewEnvName] = useState("");
+  const [repoPath, setRepoPath] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [isLinkingToRepo, setIsLinkingToRepo] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
 
   const loadEnvironment = useCallback((env: Environment) => {
     setEditingEnvId(env.id);
@@ -53,6 +57,9 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
       loadEnvironment(environments[0]);
     }
   }, [open, selectedEnvironmentId, environments, loadEnvironment]);
+
+  const confirmAction = useConfirm();
+  const editingEnv = environments.find((e) => e.id === editingEnvId);
 
   if (!open) return null;
 
@@ -100,14 +107,14 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
     setIsSaving(false);
   };
 
-  const confirmAction = useConfirm();
-
   const handleDelete = async () => {
     if (!editingEnvId) return;
     const ok = await confirmAction({
-      title: "Delete Environment",
-      message: `Are you sure you want to delete "${envName}"? This cannot be undone.`,
-      confirmLabel: "Delete",
+      title: editingEnv?.linkedPath ? "Unlink Environment" : "Delete Environment",
+      message: editingEnv?.linkedPath
+        ? `This will unlink "${envName}". The files in "${editingEnv.linkedPath}" will not be deleted.`
+        : `Are you sure you want to delete "${envName}"? This cannot be undone.`,
+      confirmLabel: editingEnv?.linkedPath ? "Unlink" : "Delete",
       variant: "danger",
     });
     if (!ok) return;
@@ -122,6 +129,66 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
     setEditingEnvId(null);
     setVars([]);
     setEnvName("");
+  };
+
+  const handleLinkToRepo = async () => {
+    if (!repoPath.trim() || !editingEnvId) return;
+    const ok = await confirmAction({
+      title: "Link to Local Repo",
+      message: `This will copy the environment files for "${envName}" into "${repoPath}" and use that folder as the source of truth from now on. The original local copies will be removed.`,
+      confirmLabel: "Copy & Link",
+    });
+    if (!ok) return;
+
+    setIsLinkingToRepo(true);
+    setLinkError(null);
+
+    try {
+      const res = await fetch("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingEnvId,
+          path: repoPath.trim(),
+          copyFrom: editingEnvId,
+          type: "environment",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await fetchEnvironments();
+      setRepoPath("");
+    } catch (e) {
+      setLinkError(e instanceof Error ? e.message : "Link failed");
+    }
+    setIsLinkingToRepo(false);
+  };
+
+  const handleUnlinkEnv = async () => {
+    if (!editingEnvId || !editingEnv?.linkedPath) return;
+    const ok = await confirmAction({
+      title: "Unlink Environment",
+      message: `Stop using "${editingEnv.linkedPath}" as the source? The files will remain in that folder but the environment will no longer appear in the app.`,
+      confirmLabel: "Unlink",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    setUnlinking(true);
+    try {
+      await fetch("/api/links", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingEnvId, type: "environment" }),
+      });
+      await fetchEnvironments();
+      setEditingEnvId(null);
+      setVars([]);
+      setEnvName("");
+    } catch {
+      // ignore
+    }
+    setUnlinking(false);
   };
 
   const handleCreate = async () => {
@@ -175,7 +242,14 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
                       : "text-text-secondary hover:bg-bg-hover"
                   }`}
                 >
-                  {env.meta.name}
+                  <span className="flex items-center gap-1.5">
+                    {env.meta.name}
+                    {env.linkedPath && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-accent/15 text-accent leading-none">
+                        linked
+                      </span>
+                    )}
+                  </span>
                 </button>
               ))}
             </div>
@@ -216,6 +290,66 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
                     onChange={(e) => setEnvName(e.target.value)}
                     className="bg-transparent text-text-primary text-sm font-medium outline-none border-b border-transparent focus:border-accent w-full"
                   />
+                </div>
+
+                {/* Storage section */}
+                <div className="px-4 py-3 border-b border-border flex-shrink-0 space-y-2">
+                  {editingEnv?.linkedPath ? (
+                    <div className="bg-bg-tertiary border border-border rounded p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent">
+                          linked
+                        </span>
+                        <span className="text-xs text-text-secondary">
+                          Reading/writing files from:
+                        </span>
+                      </div>
+                      <code className="block text-xs text-text-primary font-mono bg-bg-primary rounded px-2 py-1.5 break-all">
+                        {editingEnv.linkedPath}
+                      </code>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-text-muted">
+                          This folder is the source of truth. Manage version
+                          control (git) yourself outside the app.
+                        </p>
+                        <button
+                          onClick={handleUnlinkEnv}
+                          disabled={unlinking}
+                          className="text-xs text-error/70 hover:text-error transition-colors whitespace-nowrap ml-2"
+                        >
+                          {unlinking ? "Unlinking..." : "Unlink"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-bg-tertiary border border-border rounded p-3 space-y-2">
+                      <p className="text-xs text-text-muted">
+                        Stored locally. Link to a folder (e.g. a git repo)
+                        to make it the source of truth.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={repoPath}
+                          onChange={(e) => setRepoPath(e.target.value)}
+                          placeholder="/path/to/git/repo"
+                          className="flex-1 bg-bg-primary border border-border rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-accent font-mono"
+                        />
+                        <button
+                          onClick={handleLinkToRepo}
+                          disabled={!repoPath.trim() || isLinkingToRepo}
+                          className="bg-accent text-bg-primary px-3 py-1 rounded text-xs font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {isLinkingToRepo ? "Linking..." : "Copy & Link"}
+                        </button>
+                      </div>
+                      {linkError && (
+                        <div className="bg-error/10 border border-error/30 rounded p-1.5 text-xs text-error">
+                          {linkError}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Variables table */}
@@ -280,6 +414,7 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
                       + Add Variable
                     </button>
                   </div>
+
                 </div>
 
                 {/* Actions */}

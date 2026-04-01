@@ -1,14 +1,24 @@
 import { NextResponse } from "next/server";
-import { listLinks, addLink, removeLink, copyAndLink } from "@/lib/workspace";
+import {
+  listLinks,
+  addLink,
+  removeLink,
+  copyAndLink,
+  listEnvLinks,
+  addEnvLink,
+  removeEnvLink,
+  copyAndLinkEnvironment,
+} from "@/lib/workspace";
 
 export async function GET() {
   const links = await listLinks();
-  return NextResponse.json(links);
+  const envLinks = await listEnvLinks();
+  return NextResponse.json({ links, envLinks });
 }
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { id, path: folderPath, copyFrom } = body;
+  const { id, path: folderPath, copyFrom, type } = body;
 
   if (!id || !folderPath) {
     return NextResponse.json(
@@ -18,12 +28,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (copyFrom) {
-      // Copy existing collection files into the target folder, then link
-      await copyAndLink(copyFrom, folderPath);
+    if (type === "environment") {
+      if (copyFrom) {
+        await copyAndLinkEnvironment(copyFrom, folderPath);
+      } else {
+        await addEnvLink(id, folderPath);
+      }
     } else {
-      // Just link — the folder already has the files
-      await addLink(id, folderPath);
+      if (copyFrom) {
+        await copyAndLink(copyFrom, folderPath);
+      } else {
+        await addLink(id, folderPath);
+      }
     }
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
@@ -35,10 +51,14 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { id } = await request.json();
+  const { id, type } = await request.json();
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
-  await removeLink(id);
+  if (type === "environment") {
+    await removeEnvLink(id);
+  } else {
+    await removeLink(id);
+  }
   return NextResponse.json({ ok: true });
 }

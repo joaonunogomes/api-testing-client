@@ -39,6 +39,7 @@ async function writeYaml(filePath: string, data: unknown): Promise<void> {
 
 interface LinksFile {
   links: { id: string; path: string }[];
+  envLinks?: { id: string; path: string }[];
 }
 
 async function getLinks(): Promise<LinksFile> {
@@ -118,6 +119,91 @@ export async function copyAndLink(
 export async function listLinks(): Promise<{ id: string; path: string }[]> {
   const links = await getLinks();
   return links.links;
+}
+
+// ---- Environment Links ----
+
+export async function addEnvLink(
+  id: string,
+  folderPath: string,
+): Promise<void> {
+  const links = await getLinks();
+  const envLinks = (links.envLinks || []).filter((l) => l.id !== id);
+  envLinks.push({ id, path: folderPath });
+  links.envLinks = envLinks;
+  await saveLinks(links);
+}
+
+export async function removeEnvLink(id: string): Promise<void> {
+  const links = await getLinks();
+  links.envLinks = (links.envLinks || []).filter((l) => l.id !== id);
+  await saveLinks(links);
+}
+
+/**
+ * Copy environment files into a target folder, then link to that folder.
+ * The target folder becomes the source of truth. The original local copies are deleted.
+ */
+export async function copyAndLinkEnvironment(
+  envId: string,
+  targetPath: string,
+): Promise<void> {
+  const envDir = getEnvironmentsDir();
+
+  // Ensure target exists
+  await fs.mkdir(targetPath, { recursive: true });
+
+  const resolvedSource = path.resolve(envDir);
+  const resolvedTarget = path.resolve(targetPath);
+
+  if (resolvedSource !== resolvedTarget) {
+    // Copy env file
+    const envFile = path.join(envDir, `${envId}.env.yaml`);
+    try {
+      await fs.access(envFile);
+      await fs.copyFile(envFile, path.join(targetPath, `${envId}.env.yaml`));
+      await fs.unlink(envFile);
+    } catch {
+      // Source doesn't exist — target may already have files
+    }
+
+    // Copy secrets file if it exists
+    const secretsFile = path.join(envDir, `${envId}.env.secrets.yaml`);
+    try {
+      await fs.access(secretsFile);
+      await fs.copyFile(
+        secretsFile,
+        path.join(targetPath, `${envId}.env.secrets.yaml`),
+      );
+      await fs.unlink(secretsFile);
+    } catch {
+      // No secrets file, that's fine
+    }
+  }
+
+  await addEnvLink(envId, targetPath);
+}
+
+export async function listEnvLinks(): Promise<
+  { id: string; path: string }[]
+> {
+  const links = await getLinks();
+  return links.envLinks || [];
+}
+
+/** Resolve the actual directory for environment files — checks envLinks first, then local environments/ */
+async function resolveEnvironmentDir(id: string): Promise<string> {
+  const links = await getLinks();
+  const link = (links.envLinks || []).find((l) => l.id === id);
+  if (link) {
+    try {
+      await fs.access(link.path);
+      return link.path;
+    } catch {
+      // linked path doesn't exist, fall through
+    }
+  }
+  return getEnvironmentsDir();
 }
 
 /** Resolve the actual directory for a collection — checks links first, then local collections/ */
@@ -362,23 +448,61 @@ export async function deleteRequest(
 // ---- Environments ----
 
 export async function listEnvironments(): Promise<Environment[]> {
+  const environments: Environment[] = [];
+  const seenIds = new Set<string>();
+
+  // 1. Load linked environments first
+  const links = await getLinks();
+  for (const envLink of links.envLinks || []) {
+    try {
+      await fs.access(envLink.path);
+      const filePath = path.join(envLink.path, `${envLink.id}.env.yaml`);
+      const envFile = await readYaml<EnvironmentFile>(filePath);
+
+      let secrets: Record<string, string> = {};
+      const secretsPath = path.join(
+        envLink.path,
+        `${envLink.id}.env.secrets.yaml`,
+      );
+      try {
+        const secretsFile = await readYaml<EnvironmentFile>(secretsPath);
+        secrets = secretsFile.secrets || {};
+      } catch {
+        // No secrets file
+      }
+
+      environments.push({
+        id: envLink.id,
+        meta: envFile.meta || { name: envLink.id },
+        variables: envFile.variables || {},
+        secrets: { ...(envFile.secrets || {}), ...secrets },
+        linkedPath: envLink.path,
+      });
+      seenIds.add(envLink.id);
+    } catch {
+      // linked path or file unavailable, skip
+    }
+  }
+
+  // 2. Load local environments
   const envDir = getEnvironmentsDir();
   try {
     await fs.access(envDir);
   } catch {
-    return [];
+    return environments;
   }
 
   const entries = await fs.readdir(envDir);
-  const environments: Environment[] = [];
 
   for (const entry of entries) {
     if (!entry.endsWith(".env.yaml") || entry.endsWith(".secrets.yaml"))
       continue;
 
+    const id = entry.replace(/\.env\.yaml$/, "");
+    if (seenIds.has(id)) continue;
+
     const filePath = path.join(envDir, entry);
     const envFile = await readYaml<EnvironmentFile>(filePath);
-    const id = entry.replace(/\.env\.yaml$/, "");
 
     let secrets: Record<string, string> = {};
     const secretsPath = path.join(envDir, `${id}.env.secrets.yaml`);
@@ -432,7 +556,8 @@ export async function updateEnvironment(
   id: string,
   data: Partial<EnvironmentFile>,
 ): Promise<Environment | null> {
-  const filePath = path.join(getEnvironmentsDir(), `${id}.env.yaml`);
+  const dir = await resolveEnvironmentDir(id);
+  const filePath = path.join(dir, `${id}.env.yaml`);
   try {
     const existing = await readYaml<EnvironmentFile>(filePath);
     const updated = { ...existing, ...data };
@@ -449,6 +574,14 @@ export async function updateEnvironment(
 }
 
 export async function deleteEnvironment(id: string): Promise<void> {
+  // If linked, just remove the link (don't delete files in external folder)
+  const links = await getLinks();
+  const isLinked = (links.envLinks || []).some((l) => l.id === id);
+  if (isLinked) {
+    await removeEnvLink(id);
+    return;
+  }
+
   const filePath = path.join(getEnvironmentsDir(), `${id}.env.yaml`);
   await fs.unlink(filePath);
   try {
