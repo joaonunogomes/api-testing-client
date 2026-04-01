@@ -63,21 +63,71 @@ interface AppState {
   fetchEnvironments: () => Promise<void>;
   executeTab: (tabId: string) => Promise<void>;
   saveTab: (tabId: string) => Promise<void>;
+
+  // Session persistence
+  restoreSession: () => Promise<void>;
 }
 
 function makeTabId(collectionId: string, requestId: string) {
   return `${collectionId}/${requestId}`;
 }
 
+const STORAGE_KEY = "api-client-session";
+
+interface PersistedSession {
+  selectedEnvironmentId: string | null;
+  activeTabId: string | null;
+  tabs: { id: string; type?: string; collectionId: string; requestId: string }[];
+  expandedNodes: string[];
+}
+
+const isClient = typeof window !== "undefined";
+let sessionRestored = false;
+
+function saveSession(state: AppState) {
+  if (!isClient || !sessionRestored) return;
+  try {
+    const session: PersistedSession = {
+      selectedEnvironmentId: state.selectedEnvironmentId,
+      activeTabId: state.activeTabId,
+      tabs: state.openTabs
+        .filter((t) => t.collectionId) // skip unsaved/untitled tabs
+        .map((t) => ({
+          id: t.id,
+          type: t.type || (t.id.startsWith("__collection__") ? "collection-settings" : "request"),
+          collectionId: t.collectionId,
+          requestId: t.requestId,
+        })),
+      expandedNodes: [...state.expandedNodes],
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadSession(): PersistedSession | null {
+  if (!isClient) return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+const savedSession = loadSession();
+
 export const useAppStore = create<AppState>((set, get) => ({
   collections: [],
   openTabs: [],
   activeTabId: null,
   environments: [],
-  selectedEnvironmentId: null,
+  selectedEnvironmentId: savedSession?.selectedEnvironmentId ?? null,
   oauth2Tokens: new Map(),
   sidebarWidth: 280,
-  expandedNodes: new Set(),
+  expandedNodes: new Set(savedSession?.expandedNodes ?? []),
 
   setCollections: (collections) => set({ collections }),
   setEnvironments: (environments) => set({ environments }),
@@ -379,4 +429,44 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
     }
   },
+
+  restoreSession: async () => {
+    const session = loadSession();
+    if (!session) {
+      sessionRestored = true;
+      return;
+    }
+
+    // Re-open saved tabs
+    for (const tab of session.tabs) {
+      const isCollectionTab = tab.type === "collection-settings" || tab.id.startsWith("__collection__");
+      if (isCollectionTab) {
+        get().openCollectionSettings(tab.collectionId);
+      } else if (tab.collectionId && tab.requestId) {
+        await get().openRequest(tab.collectionId, tab.requestId);
+      }
+    }
+
+    // Restore active tab
+    if (session.activeTabId) {
+      const exists = get().openTabs.find((t) => t.id === session.activeTabId);
+      if (exists) {
+        set({ activeTabId: session.activeTabId });
+      }
+    }
+
+    sessionRestored = true;
+  },
 }));
+
+// Auto-save session on relevant state changes
+useAppStore.subscribe((state, prevState) => {
+  if (
+    state.openTabs !== prevState.openTabs ||
+    state.activeTabId !== prevState.activeTabId ||
+    state.selectedEnvironmentId !== prevState.selectedEnvironmentId ||
+    state.expandedNodes !== prevState.expandedNodes
+  ) {
+    saveSession(state);
+  }
+});

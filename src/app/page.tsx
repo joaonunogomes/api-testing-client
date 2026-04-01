@@ -43,8 +43,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchCollections();
-    fetchEnvironments();
+    const init = async () => {
+      await Promise.all([fetchCollections(), fetchEnvironments()]);
+      // Restore tabs and environment after data is loaded
+      await useAppStore.getState().restoreSession();
+    };
+    init();
 
     // SSE for live reload
     const eventSource = new EventSource("/api/events");
