@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AuthConfig, AuthOAuth2 } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
+import { VariableInput } from "./VariableHighlight";
 import { v4 as uuidv4 } from "uuid";
 
 interface AuthEditorProps {
@@ -27,6 +28,7 @@ function Field({
   type = "text",
   mono = false,
   hint,
+  collectionId,
 }: {
   label: string;
   value: string;
@@ -35,17 +37,28 @@ function Field({
   type?: string;
   mono?: boolean;
   hint?: string;
+  collectionId?: string | null;
 }) {
   return (
     <div>
       <label className="block text-xs text-text-muted mb-1">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`w-full bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent ${mono ? "font-mono" : ""}`}
-      />
+      {type === "password" ? (
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent ${mono ? "font-mono" : ""}`}
+        />
+      ) : (
+        <VariableInput
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          collectionId={collectionId ?? null}
+          className={`bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent ${mono ? "font-mono" : ""}`}
+        />
+      )}
       {hint && <p className="text-[10px] text-text-muted mt-0.5">{hint}</p>}
     </div>
   );
@@ -471,6 +484,7 @@ function OAuth2Editor({
             onChange={(v) => update({ authorizationUrl: v })}
             placeholder="https://provider.com/authorize"
             mono
+            collectionId={selectedCollectionId}
           />
         )}
 
@@ -480,6 +494,7 @@ function OAuth2Editor({
           onChange={(v) => update({ tokenUrl: v })}
           placeholder="https://provider.com/token"
           mono
+          collectionId={selectedCollectionId}
         />
 
         <div className="grid grid-cols-2 gap-2">
@@ -489,6 +504,7 @@ function OAuth2Editor({
             onChange={(v) => update({ clientId: v })}
             placeholder="{{clientId}}"
             mono
+            collectionId={selectedCollectionId}
           />
           <Field
             label="Client Secret"
@@ -508,6 +524,7 @@ function OAuth2Editor({
             placeholder="http://localhost:3000/api/oauth2/callback"
             mono
             hint="Must match the redirect URI registered with the provider"
+            collectionId={selectedCollectionId}
           />
         )}
 
@@ -517,6 +534,7 @@ function OAuth2Editor({
           onChange={(v) => update({ scope: v })}
           placeholder="openid profile email"
           hint="Space-separated scopes"
+          collectionId={selectedCollectionId}
         />
 
         {needsPassword && (
@@ -526,6 +544,7 @@ function OAuth2Editor({
               value={auth.username || ""}
               onChange={(v) => update({ username: v })}
               placeholder="{{username}}"
+              collectionId={selectedCollectionId}
             />
             <Field
               label="Password"
@@ -545,6 +564,7 @@ function OAuth2Editor({
             placeholder="https://api.example.com"
             mono
             hint="Optional — required by some providers (Auth0, etc.)"
+            collectionId={selectedCollectionId}
           />
           <Field
             label="Resource"
@@ -553,6 +573,7 @@ function OAuth2Editor({
             placeholder="https://graph.microsoft.com"
             mono
             hint="Optional — used by Azure AD"
+            collectionId={selectedCollectionId}
           />
         </div>
       </div>
@@ -601,6 +622,7 @@ export function AuthEditor({
   collectionAuth,
   onChange,
 }: AuthEditorProps) {
+  const activeCollectionId = useActiveCollectionId();
   const isInheriting = !auth && !!collectionAuth;
   const effectiveAuth = auth || collectionAuth;
   const authType = auth?.type || (isInheriting ? "inherit" : "none");
@@ -687,6 +709,7 @@ export function AuthEditor({
           placeholder="{{token}} or paste a raw token"
           mono
           hint="Supports {{variables}} from environments and collections"
+          collectionId={activeCollectionId}
         />
       )}
 
@@ -698,6 +721,7 @@ export function AuthEditor({
             value={auth.username}
             onChange={(v) => onChange({ ...auth, username: v })}
             placeholder="{{username}}"
+            collectionId={activeCollectionId}
           />
           <Field
             label="Password"
@@ -718,6 +742,7 @@ export function AuthEditor({
               value={auth.key}
               onChange={(v) => onChange({ ...auth, key: v })}
               placeholder="X-API-Key"
+              collectionId={activeCollectionId}
             />
             <Field
               label="Value"
@@ -725,6 +750,7 @@ export function AuthEditor({
               onChange={(v) => onChange({ ...auth, value: v })}
               placeholder="{{apiKey}}"
               mono
+              collectionId={activeCollectionId}
             />
           </div>
           <div>

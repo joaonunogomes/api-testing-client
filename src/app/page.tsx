@@ -6,13 +6,16 @@ import { Sidebar } from "@/components/Sidebar";
 import { TabBar } from "@/components/TabBar";
 import { RequestEditor } from "@/components/RequestEditor";
 import { ResponseViewer } from "@/components/ResponseViewer";
+import { CollectionSettings } from "@/components/CollectionSettings";
 
 export default function Home() {
   const { fetchCollections, fetchEnvironments } = useAppStore();
   const [responseHeight, setResponseHeight] = useState(300);
   const [isDragging, setIsDragging] = useState(false);
 
-  const { closeTab, activeTabId } = useAppStore();
+  const { closeTab, activeTabId, openTabs } = useAppStore();
+  const activeTab = openTabs.find((t) => t.id === activeTabId);
+  const isCollectionSettings = activeTab?.type === "collection-settings";
 
   // Cmd+W / Ctrl+W closes the active tab instead of the window
   useEffect(() => {
@@ -100,24 +103,32 @@ export default function Home() {
           {/* Tab bar */}
           <TabBar />
 
-          {/* Request editor */}
-          <div className="flex-1 overflow-hidden" style={{ minHeight: 200 }}>
-            <RequestEditor />
-          </div>
+          {isCollectionSettings ? (
+            <div className="flex-1 overflow-hidden">
+              <CollectionSettings collectionId={activeTab.collectionId} />
+            </div>
+          ) : (
+            <>
+              {/* Request editor */}
+              <div className="flex-1 overflow-hidden" style={{ minHeight: 200 }}>
+                <RequestEditor />
+              </div>
 
-          {/* Resize handle */}
-          <div
-            onMouseDown={() => setIsDragging(true)}
-            className={`h-1 cursor-row-resize border-t border-border hover:bg-accent/20 transition-colors ${isDragging ? "bg-accent/30" : ""}`}
-          />
+              {/* Resize handle */}
+              <div
+                onMouseDown={() => setIsDragging(true)}
+                className={`h-1 cursor-row-resize border-t border-border hover:bg-accent/20 transition-colors ${isDragging ? "bg-accent/30" : ""}`}
+              />
 
-          {/* Response viewer */}
-          <div
-            className="overflow-hidden bg-bg-secondary"
-            style={{ height: responseHeight }}
-          >
-            <ResponseViewer />
-          </div>
+              {/* Response viewer */}
+              <div
+                className="overflow-hidden bg-bg-secondary"
+                style={{ height: responseHeight }}
+              >
+                <ResponseViewer />
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>

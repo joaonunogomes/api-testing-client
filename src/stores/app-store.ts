@@ -8,7 +8,8 @@ import type {
 } from "@/lib/types";
 
 export interface OpenTab {
-  id: string; // collectionId/requestId
+  id: string; // collectionId/requestId or __collection__collectionId
+  type?: "request" | "collection-settings";
   collectionId: string;
   requestId: string;
   label: string;
@@ -49,6 +50,7 @@ interface AppState {
   // Tab actions
   openNewTab: () => void;
   openRequest: (collectionId: string, requestId: string) => void;
+  openCollectionSettings: (collectionId: string) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   updateTabRequest: (tabId: string, request: RequestFile) => void;
@@ -127,6 +129,40 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       ],
       activeTabId: id,
+    }));
+  },
+
+  openCollectionSettings: (collectionId) => {
+    const tabId = `__collection__${collectionId}`;
+    const state = get();
+
+    // If tab already open, just activate it
+    const existing = state.openTabs.find((t) => t.id === tabId);
+    if (existing) {
+      set({ activeTabId: tabId });
+      return;
+    }
+
+    const collection = state.collections.find((c) => c.id === collectionId);
+    if (!collection) return;
+
+    set((s) => ({
+      openTabs: [
+        ...s.openTabs,
+        {
+          id: tabId,
+          type: "collection-settings",
+          collectionId,
+          requestId: "",
+          label: collection.meta.name,
+          method: "",
+          request: null,
+          response: null,
+          isExecuting: false,
+          isDirty: false,
+        },
+      ],
+      activeTabId: tabId,
     }));
   },
 

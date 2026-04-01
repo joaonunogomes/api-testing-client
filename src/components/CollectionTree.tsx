@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { useAppStore } from "@/stores/app-store";
-import { CollectionEditor } from "./CollectionEditor";
 import type { Collection, TreeNode } from "@/lib/types";
 
 const METHOD_COLORS: Record<string, string> = {
@@ -20,19 +18,17 @@ function TreeNodeItem({
   depth,
   collectionId,
   isLinked,
-  onEditCollection,
 }: {
   node: TreeNode;
   depth: number;
   collectionId: string;
   isLinked?: boolean;
-  onEditCollection?: () => void;
-  onGitOpen?: () => void;
 }) {
   const {
     expandedNodes,
     toggleNode,
     openRequest,
+    openCollectionSettings,
     activeTabId,
   } = useAppStore();
 
@@ -40,9 +36,15 @@ function TreeNodeItem({
   const isFolder = node.type === "collection" || node.type === "folder";
   const isSelected =
     node.type === "request" && activeTabId === node.id;
+  const isCollectionSelected =
+    node.type === "collection" && activeTabId === `__collection__${collectionId}`;
 
   const handleClick = () => {
-    if (isFolder) {
+    if (node.type === "collection") {
+      openCollectionSettings(collectionId);
+      // Also expand/collapse the tree
+      toggleNode(node.id);
+    } else if (isFolder) {
       toggleNode(node.id);
     } else {
       const requestId = node.id.replace(`${collectionId}/`, "");
@@ -55,7 +57,7 @@ function TreeNodeItem({
       <div
         onClick={handleClick}
         className={`flex items-center gap-1.5 px-2 py-1 cursor-pointer text-sm hover:bg-bg-hover transition-colors group ${
-          isSelected ? "bg-bg-hover text-text-primary" : "text-text-secondary"
+          isSelected || isCollectionSelected ? "bg-bg-hover text-text-primary" : "text-text-secondary"
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
       >
@@ -84,22 +86,6 @@ function TreeNodeItem({
             linked
           </span>
         )}
-
-        {node.type === "collection" && onEditCollection && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditCollection();
-            }}
-            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent transition-all px-0.5 flex-shrink-0"
-            title="Settings"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-        )}
       </div>
 
       {isFolder && isExpanded && node.children && (
@@ -119,22 +105,12 @@ function TreeNodeItem({
 }
 
 export function CollectionTree({ collection }: { collection: Collection }) {
-  const [showEditor, setShowEditor] = useState(false);
-
   return (
-    <>
-      <TreeNodeItem
-        node={collection.tree}
-        depth={0}
-        collectionId={collection.id}
-        isLinked={!!collection.linkedPath}
-        onEditCollection={() => setShowEditor(true)}
-      />
-      <CollectionEditor
-        collection={collection}
-        open={showEditor}
-        onClose={() => setShowEditor(false)}
-      />
-    </>
+    <TreeNodeItem
+      node={collection.tree}
+      depth={0}
+      collectionId={collection.id}
+      isLinked={!!collection.linkedPath}
+    />
   );
 }
