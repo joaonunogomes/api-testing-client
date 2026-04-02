@@ -1,4 +1,4 @@
-const { app, BrowserWindow, utilityProcess, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, utilityProcess, Menu, ipcMain, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const net = require("net");
@@ -157,6 +157,9 @@ function createWindow(port) {
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+
+  // Open URL in system browser (for OAuth2 browser-redirect flows)
+  ipcMain.handle("open-external", (_event, url) => shell.openExternal(url));
 
   // Window control IPC for frameless windows (Windows/Linux)
   ipcMain.on("window-minimize", () => mainWindow?.minimize());

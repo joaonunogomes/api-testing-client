@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAppStore } from "@/stores/app-store";
 
@@ -167,6 +167,75 @@ export function VariableText({
  * An input that shows a highlighted overlay for {{variables}}.
  * The actual editing happens in a regular input underneath.
  */
+/**
+ * Extract the variable prefix being typed at the cursor position.
+ * Returns { start, prefix } if the cursor is inside `{{prefix` (no closing `}}`), null otherwise.
+ */
+function getVarPrefixAtCursor(
+  value: string,
+  cursorPos: number,
+): { start: number; prefix: string } | null {
+  const before = value.slice(0, cursorPos);
+  // Find the last `{{` before the cursor that isn't already closed
+  const openIdx = before.lastIndexOf("{{");
+  if (openIdx === -1) return null;
+  const afterOpen = before.slice(openIdx + 2);
+  // If there's a `}}` between the `{{` and cursor, it's already closed
+  if (afterOpen.includes("}}")) return null;
+  return { start: openIdx, prefix: afterOpen.trim() };
+}
+
+function AutocompleteDropdown({
+  items,
+  selectedIndex,
+  onSelect,
+  anchorRef,
+}: {
+  items: { name: string; value: string }[];
+  selectedIndex: number;
+  onSelect: (name: string) => void;
+  anchorRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
+
+  if (!anchorRef.current || items.length === 0) return null;
+  const rect = anchorRef.current.getBoundingClientRect();
+
+  return createPortal(
+    <div
+      ref={listRef}
+      className="fixed z-[400] bg-bg-secondary border border-border rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
+      style={{ top: rect.bottom + 4, left: rect.left }}
+    >
+      {items.map((item, i) => (
+        <button
+          key={item.name}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onSelect(item.name);
+          }}
+          className={`w-full text-left px-2.5 py-1.5 text-xs flex items-center justify-between gap-3 ${
+            i === selectedIndex
+              ? "bg-accent/15 text-accent"
+              : "text-text-primary hover:bg-bg-tertiary"
+          }`}
+        >
+          <span className="font-mono truncate">{`{{${item.name}}}`}</span>
+          <span className="text-text-muted truncate max-w-[120px] text-[10px]">
+            {item.value}
+          </span>
+        </button>
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
 export function VariableInput({
   value,
   onChange,
@@ -186,11 +255,89 @@ export function VariableInput({
   onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void;
   wrapperClassName?: string;
 }) {
+  const availableVars = useAvailableVars(collectionId);
   const hasVars = value.includes("{{");
   const [focused, setFocused] = useState(false);
+  const [acState, setAcState] = useState<{ prefix: string; start: number } | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const showOverlay = hasVars && !focused;
+
+  const filteredVars = useMemo(() => {
+    if (!acState) return [];
+    const q = acState.prefix.toLowerCase();
+    const items: { name: string; value: string }[] = [];
+    for (const [name, val] of availableVars) {
+      if (name.toLowerCase().includes(q)) {
+        items.push({ name, value: val });
+      }
+    }
+    return items.slice(0, 20);
+  }, [acState, availableVars]);
+
+  const updateAutocomplete = useCallback(
+    (newValue: string, cursorPos: number) => {
+      const result = getVarPrefixAtCursor(newValue, cursorPos);
+      if (result) {
+        setAcState(result);
+        setSelectedIdx(0);
+      } else {
+        setAcState(null);
+      }
+    },
+    [],
+  );
+
+  const completeVar = useCallback(
+    (varName: string) => {
+      if (!acState || !inputRef.current) return;
+      // Replace from `{{` to cursor with `{{varName}}`
+      const before = value.slice(0, acState.start);
+      const after = value.slice(inputRef.current.selectionStart ?? value.length);
+      const completed = `${before}{{${varName}}}${after}`;
+      onChange(completed);
+      setAcState(null);
+      // Move cursor after the closing `}}`
+      const newPos = acState.start + varName.length + 4;
+      requestAnimationFrame(() => {
+        inputRef.current?.setSelectionRange(newPos, newPos);
+      });
+    },
+    [acState, value, onChange],
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (acState && filteredVars.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIdx((i) => Math.min(i + 1, filteredVars.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIdx((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        completeVar(filteredVars[selectedIdx].name);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setAcState(null);
+        return;
+      }
+    }
+    onKeyDown?.(e);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVal = e.target.value;
+    onChange(newVal);
+    updateAutocomplete(newVal, e.target.selectionStart ?? newVal.length);
+  };
 
   return (
     <div className={`relative ${wrapperClassName}`}>
@@ -198,12 +345,20 @@ export function VariableInput({
         ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleChange}
         placeholder={placeholder}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKeyDown}
         onPaste={onPaste}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onFocus={() => {
+          setFocused(true);
+          if (inputRef.current) {
+            updateAutocomplete(value, inputRef.current.selectionStart ?? value.length);
+          }
+        }}
+        onBlur={() => {
+          setFocused(false);
+          setAcState(null);
+        }}
         className={`w-full ${className} ${showOverlay ? "text-transparent caret-text-primary" : ""}`}
         spellCheck={false}
       />
@@ -214,6 +369,14 @@ export function VariableInput({
         >
           <VariableText text={value} collectionId={collectionId} />
         </div>
+      )}
+      {focused && acState && filteredVars.length > 0 && (
+        <AutocompleteDropdown
+          items={filteredVars}
+          selectedIndex={selectedIdx}
+          onSelect={completeVar}
+          anchorRef={inputRef}
+        />
       )}
     </div>
   );

@@ -45,7 +45,7 @@ interface AppState {
   setSelectedEnvironmentId: (id: string | null) => void;
   toggleNode: (nodeId: string) => void;
   setSidebarWidth: (width: number) => void;
-  setOAuth2Token: (collectionId: string, token: OAuth2TokenState) => void;
+  setOAuth2Token: (tokenKey: string, token: OAuth2TokenState) => void;
 
   // Tab actions
   openNewTab: () => void;
@@ -146,10 +146,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
-  setOAuth2Token: (collectionId, token) =>
+  setOAuth2Token: (tokenKey, token) =>
     set((state) => {
       const tokens = new Map(state.oauth2Tokens);
-      tokens.set(collectionId, token);
+      tokens.set(tokenKey, token);
       return { oauth2Tokens: tokens };
     }),
 
@@ -384,7 +384,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         let oauth2Token: string | undefined;
 
         if (auth?.type === "oauth2") {
-          const tokenState = state.oauth2Tokens.get(tab.collectionId);
+          // Request-level auth uses tab ID as token key; inherited uses collection ID
+          const tokenKey = tab.request.request.auth?.type === "oauth2"
+            ? tab.id
+            : tab.collectionId;
+          const tokenState = state.oauth2Tokens.get(tokenKey);
           if (tokenState?.accessToken) {
             oauth2Token = tokenState.accessToken;
           }

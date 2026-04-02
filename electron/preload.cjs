@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld("electron", {
   windowMinimize: () => ipcRenderer.send("window-minimize"),
   windowMaximize: () => ipcRenderer.send("window-maximize"),
   windowClose: () => ipcRenderer.send("window-close"),
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
 });

@@ -41,6 +41,8 @@ export interface AuthOAuth2 {
   // Extra params sent with token request
   audience?: string;
   resource?: string;
+  // Redirect mode: "app" uses in-app popup, "browser" opens system browser (useful for SSO)
+  redirectMode?: "app" | "browser";
 }
 
 export type AuthConfig =

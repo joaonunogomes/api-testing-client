@@ -40,17 +40,30 @@ function Field({
   hint?: string;
   collectionId?: string | null;
 }) {
+  const [visible, setVisible] = useState(false);
+  const isSecret = type === "password";
+
   return (
     <div>
       <label className="block text-xs text-text-muted mb-1">{label}</label>
-      {type === "password" ? (
-        <input
-          type="password"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={`w-full bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent ${mono ? "font-mono" : ""}`}
-        />
+      {isSecret ? (
+        <div className="relative">
+          <VariableInput
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            collectionId={collectionId ?? null}
+            className={`bg-bg-primary border border-border rounded px-2 py-1.5 pr-8 text-sm text-text-primary outline-none focus:border-accent ${mono ? "font-mono" : ""} ${!visible ? "[-webkit-text-security:disc]" : ""}`}
+          />
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors text-xs"
+            title={visible ? "Hide" : "Show"}
+          >
+            {visible ? "Hide" : "Show"}
+          </button>
+        </div>
       ) : (
         <VariableInput
           value={value}
@@ -65,17 +78,24 @@ function Field({
   );
 }
 
-function useActiveCollectionId(): string | null {
+function useActiveTab() {
   const { openTabs, activeTabId } = useAppStore();
-  const tab = openTabs.find((t) => t.id === activeTabId);
+  return openTabs.find((t) => t.id === activeTabId) ?? null;
+}
+
+function useActiveCollectionId(): string | null {
+  const tab = useActiveTab();
   return tab?.collectionId ?? null;
 }
 
-function TokenStatus() {
-  const collectionId = useActiveCollectionId();
+function TokenStatus({ tokenKey }: { tokenKey?: string }) {
+  const tab = useActiveTab();
+  const collectionId = tab?.collectionId ?? null;
+  // Default: use collectionId (collection-level token)
+  const resolvedKey = tokenKey ?? collectionId;
   const { oauth2Tokens } = useAppStore();
-  const tokenState = collectionId
-    ? oauth2Tokens.get(collectionId)
+  const tokenState = resolvedKey
+    ? oauth2Tokens.get(resolvedKey)
     : null;
 
   if (!tokenState) return null;
@@ -115,9 +135,9 @@ function TokenStatus() {
           )}
           <button
             onClick={() => {
-              if (collectionId) {
+              if (resolvedKey) {
                 const tokens = new Map(useAppStore.getState().oauth2Tokens);
-                tokens.delete(collectionId);
+                tokens.delete(resolvedKey);
                 useAppStore.setState({ oauth2Tokens: tokens });
               }
             }}
@@ -175,11 +195,17 @@ function TokenStatus() {
 function OAuth2Editor({
   auth,
   onChange,
+  tokenKey: tokenKeyProp,
 }: {
   auth: AuthOAuth2;
   onChange: (auth: AuthOAuth2) => void;
+  tokenKey?: string;
 }) {
-  const selectedCollectionId = useActiveCollectionId();
+  const tab = useActiveTab();
+  const selectedCollectionId = tab?.collectionId ?? null;
+  const isCollectionTab = tab?.type === "collection-settings";
+  // Collection-level auth uses collectionId; request-level uses tab ID
+  const tokenKey = tokenKeyProp ?? (isCollectionTab ? selectedCollectionId : tab?.id) ?? selectedCollectionId;
   const {
     collections,
     selectedEnvironmentId,
@@ -189,6 +215,7 @@ function OAuth2Editor({
   } = useAppStore();
   const [isLoading, setIsLoading] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [forceLogin, setForceLogin] = useState(false);
 
   const resolveVar = (template: string) => {
     const collection = collections.find((c) => c.id === selectedCollectionId);
@@ -207,10 +234,10 @@ function OAuth2Editor({
   };
 
   const storeToken = (data: Record<string, unknown>) => {
-    if (!selectedCollectionId) return;
+    if (!tokenKey) return;
     if (data.access_token) {
-      setOAuth2Token(selectedCollectionId, {
-        collectionId: selectedCollectionId,
+      setOAuth2Token(tokenKey, {
+        collectionId: selectedCollectionId || "",
         accessToken: data.access_token as string,
         refreshToken: data.refresh_token as string | undefined,
         tokenType: data.token_type as string | undefined,
@@ -228,6 +255,31 @@ function OAuth2Editor({
           "No access_token in response",
       );
     }
+  };
+
+  const exchangeCode = async (
+    code: string,
+    clientId: string,
+    callbackUrl: string,
+    scope: string,
+    codeVerifier: string,
+  ) => {
+    const res = await fetch("/api/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tokenUrl: resolveVar(auth.tokenUrl),
+        grantType: auth.grantType,
+        code,
+        clientId,
+        clientSecret: resolveVar(auth.clientSecret),
+        callbackUrl,
+        codeVerifier: codeVerifier || undefined,
+        scope: scope || undefined,
+      }),
+    });
+    const data = await res.json();
+    storeToken(data);
   };
 
   // Authorization Code / PKCE flow
@@ -278,58 +330,87 @@ function OAuth2Editor({
       params.set("code_challenge_method", "S256");
     }
 
-    const authWindow = window.open(
-      `${authUrl}?${params.toString()}`,
-      "oauth2",
-      "width=600,height=700",
-    );
+    const useBrowser = auth.redirectMode === "browser";
 
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.data?.type === "oauth2-callback") {
-        window.removeEventListener("message", handleMessage);
-        authWindow?.close();
+    // Force re-authentication in app window mode (OIDC prompt=login)
+    if (!useBrowser && forceLogin) {
+      params.set("prompt", "login");
+    }
 
+    const fullAuthUrl = `${authUrl}?${params.toString()}`;
+
+    if (useBrowser) {
+      // Open in system browser — useful for SSO with existing browser sessions
+      const electron = (window as unknown as { electron?: { openExternal: (url: string) => Promise<void> } }).electron;
+      if (electron?.openExternal) {
+        await electron.openExternal(fullAuthUrl);
+      } else {
+        window.open(fullAuthUrl, "_blank");
+      }
+
+      // Poll for the callback result
+      const pollInterval = setInterval(async () => {
         try {
-          const res = await fetch("/api/oauth2/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tokenUrl: resolveVar(auth.tokenUrl),
-              grantType: auth.grantType,
-              code: event.data.code,
-              clientId,
-              clientSecret: resolveVar(auth.clientSecret),
-              callbackUrl,
-              codeVerifier: codeVerifier || undefined,
-              scope: scope || undefined,
-            }),
-          });
+          const res = await fetch(`/api/oauth2/callback/poll?state=${state}`);
           const data = await res.json();
-          storeToken(data);
-        } catch (err) {
-          setTokenError(
-            err instanceof Error ? err.message : "Token exchange failed",
-          );
+          if (data.pending) return;
+
+          clearInterval(pollInterval);
+          if (data.error) {
+            setTokenError(data.error);
+            setIsLoading(false);
+          } else if (data.code) {
+            try {
+              await exchangeCode(data.code, clientId, callbackUrl, scope, codeVerifier);
+            } catch (err) {
+              setTokenError(err instanceof Error ? err.message : "Token exchange failed");
+            }
+            setIsLoading(false);
+          }
+        } catch {
+          // Network error — keep polling
         }
-        setIsLoading(false);
-      } else if (event.data?.type === "oauth2-error") {
-        window.removeEventListener("message", handleMessage);
-        authWindow?.close();
-        setTokenError(event.data.error || "Authorization failed");
-        setIsLoading(false);
-      }
-    };
+      }, 1500);
 
-    window.addEventListener("message", handleMessage);
-
-    // Timeout if window is closed without completing
-    const check = setInterval(() => {
-      if (authWindow?.closed) {
-        clearInterval(check);
-        window.removeEventListener("message", handleMessage);
+      // Stop polling after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setTokenError("Browser authorization timed out");
         setIsLoading(false);
-      }
-    }, 1000);
+      }, 5 * 60 * 1000);
+    } else {
+      // Open in-app popup
+      const authWindow = window.open(fullAuthUrl, "oauth2", "width=600,height=700");
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.data?.type === "oauth2-callback") {
+          window.removeEventListener("message", handleMessage);
+          authWindow?.close();
+          try {
+            await exchangeCode(event.data.code, clientId, callbackUrl, scope, codeVerifier);
+          } catch (err) {
+            setTokenError(err instanceof Error ? err.message : "Token exchange failed");
+          }
+          setIsLoading(false);
+        } else if (event.data?.type === "oauth2-error") {
+          window.removeEventListener("message", handleMessage);
+          authWindow?.close();
+          setTokenError(event.data.error || "Authorization failed");
+          setIsLoading(false);
+        }
+      };
+
+      window.addEventListener("message", handleMessage);
+
+      // Timeout if window is closed without completing
+      const check = setInterval(() => {
+        if (authWindow?.closed) {
+          clearInterval(check);
+          window.removeEventListener("message", handleMessage);
+          setIsLoading(false);
+        }
+      }, 1000);
+    }
   };
 
   // Client Credentials flow
@@ -394,8 +475,8 @@ function OAuth2Editor({
 
   // Refresh token
   const refreshTokenFlow = async () => {
-    const tokenState = selectedCollectionId
-      ? oauth2Tokens.get(selectedCollectionId)
+    const tokenState = tokenKey
+      ? oauth2Tokens.get(tokenKey)
       : null;
     if (!tokenState?.refreshToken) return;
 
@@ -440,8 +521,8 @@ function OAuth2Editor({
     }
   };
 
-  const tokenState = selectedCollectionId
-    ? oauth2Tokens.get(selectedCollectionId)
+  const tokenState = tokenKey
+    ? oauth2Tokens.get(tokenKey)
     : null;
 
   const needsAuthUrl =
@@ -513,15 +594,36 @@ function OAuth2Editor({
         </div>
 
         {needsCallback && (
-          <Field
-            label="Callback URL"
-            value={auth.callbackUrl || ""}
-            onChange={(v) => update({ callbackUrl: v })}
-            placeholder="http://localhost:3000/api/oauth2/callback"
-            mono
-            hint="Must match the redirect URI registered with the provider"
-            collectionId={selectedCollectionId}
-          />
+          <>
+            <Field
+              label="Callback URL"
+              value={auth.callbackUrl || ""}
+              onChange={(v) => update({ callbackUrl: v })}
+              placeholder="http://localhost:3000/api/oauth2/callback"
+              mono
+              hint="Must match the redirect URI registered with the provider"
+              collectionId={selectedCollectionId}
+            />
+            <div>
+              <label className="block text-xs text-text-muted mb-1">
+                Open authorization in
+              </label>
+              <Select
+                value={auth.redirectMode || "app"}
+                onChange={(v) => update({ redirectMode: v as "app" | "browser" })}
+                options={[
+                  { value: "app", label: "App Window (popup)" },
+                  { value: "browser", label: "System Browser (SSO)" },
+                ]}
+                className="w-full"
+              />
+              {auth.redirectMode === "browser" && (
+                <p className="text-[10px] text-text-muted mt-0.5">
+                  Opens login in your default browser — uses existing sessions for SSO
+                </p>
+              )}
+            </div>
+          </>
         )}
 
         <Field
@@ -575,28 +677,40 @@ function OAuth2Editor({
       </div>
 
       {/* Token actions */}
-      <div className="flex items-center gap-2 pt-1">
-        {auth.grantType !== "implicit" && (
-          <button
-            onClick={handleGetToken}
-            disabled={isLoading}
-            className="bg-accent text-bg-primary px-4 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading
-              ? "Getting Token..."
-              : tokenState?.accessToken
-                ? "Refresh Token"
-                : "Get Token"}
-          </button>
-        )}
-        {tokenState?.refreshToken && (
-          <button
-            onClick={refreshTokenFlow}
-            disabled={isLoading}
-            className="text-sm text-accent hover:text-accent-hover border border-accent/30 hover:border-accent/60 px-3 py-1.5 rounded transition-colors disabled:opacity-50"
-          >
-            Use Refresh Token
-          </button>
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-2">
+          {auth.grantType !== "implicit" && !tokenState?.refreshToken && (
+            <button
+              onClick={handleGetToken}
+              disabled={isLoading}
+              className="bg-accent text-bg-primary px-4 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Getting Token..." : "Get Token"}
+            </button>
+          )}
+          {tokenState?.refreshToken && (
+            <button
+              onClick={refreshTokenFlow}
+              disabled={isLoading}
+              className="bg-accent text-bg-primary px-4 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Getting Token..." : "Refresh Token"}
+            </button>
+          )}
+        </div>
+        {/* Force login checkbox — only for app window redirect flows */}
+        {needsCallback && auth.redirectMode !== "browser" && (
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={forceLogin}
+              onChange={(e) => setForceLogin(e.target.checked)}
+              className="rounded border-border accent-accent"
+            />
+            <span className="text-xs text-text-muted">
+              Force new login session (prompt=login)
+            </span>
+          </label>
         )}
       </div>
 
@@ -608,7 +722,7 @@ function OAuth2Editor({
       )}
 
       {/* Token status */}
-      <TokenStatus />
+      <TokenStatus tokenKey={tokenKey ?? undefined} />
     </div>
   );
 }
@@ -686,10 +800,10 @@ export function AuthEditor({
           </p>
           {collectionAuth.type === "oauth2" && (
             <div className="mt-2">
-              <OAuth2Editor
-                auth={collectionAuth as AuthOAuth2}
-                onChange={onChange}
-              />
+              <p className="text-[10px] text-text-muted mb-2">
+                Manage tokens from the collection settings.
+              </p>
+              <TokenStatus tokenKey={activeCollectionId ?? undefined} />
             </div>
           )}
         </div>
