@@ -12,6 +12,14 @@ export default function Home() {
   const { fetchCollections, fetchEnvironments } = useAppStore();
   const [responseHeight, setResponseHeight] = useState(300);
   const [isDragging, setIsDragging] = useState(false);
+  const [electronPlatform, setElectronPlatform] = useState<string | null>(null);
+  useEffect(() => {
+    const api = (window as unknown as { electron?: { platform?: string } }).electron;
+    if (api?.platform) setElectronPlatform(api.platform);
+  }, []);
+  const electronApi = typeof window !== "undefined" ? (window as unknown as { electron?: { platform?: string; windowMinimize?: () => void; windowMaximize?: () => void; windowClose?: () => void } }).electron : undefined;
+  const isElectronMac = electronPlatform === "darwin";
+  const isElectronNonMac = !!electronPlatform && electronPlatform !== "darwin";
 
   const { closeTab, activeTabId, openTabs } = useAppStore();
   const activeTab = openTabs.find((t) => t.id === activeTabId);
@@ -84,18 +92,50 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-tertiary">
+      {/* Top bar — draggable as window title bar on Electron */}
+      <header
+        className="flex items-center justify-between pr-4 border-b border-border bg-bg-tertiary"
+        style={{
+          paddingTop: isElectronMac ? 10 : 8,
+          paddingBottom: isElectronMac ? 10 : 8,
+          paddingLeft: isElectronMac ? 96 : 16,
+          ...(electronPlatform ? { WebkitAppRegion: "drag" } : {}),
+        } as React.CSSProperties}
+      >
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-semibold text-text-primary tracking-wide">
             API Client
           </h1>
         </div>
-        <div className="flex items-center gap-2 text-xs text-text-muted">
-          <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
-            Ctrl+Enter
-          </kbd>
-          <span>to send</span>
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
+              Ctrl+Enter
+            </kbd>
+            <span>to send</span>
+          </div>
+          {isElectronNonMac && (
+            <div className="flex items-center ml-4">
+              <button
+                onClick={() => electronApi?.windowMinimize?.()}
+                className="w-8 h-8 flex items-center justify-center text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors rounded"
+              >
+                <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+              </button>
+              <button
+                onClick={() => electronApi?.windowMaximize?.()}
+                className="w-8 h-8 flex items-center justify-center text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors rounded"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg>
+              </button>
+              <button
+                onClick={() => electronApi?.windowClose?.()}
+                className="w-8 h-8 flex items-center justify-center text-text-muted hover:bg-error hover:text-white transition-colors rounded"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.2"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

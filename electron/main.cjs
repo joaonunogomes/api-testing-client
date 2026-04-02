@@ -1,4 +1,4 @@
-const { app, BrowserWindow, utilityProcess, Menu } = require("electron");
+const { app, BrowserWindow, utilityProcess, Menu, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const net = require("net");
@@ -85,6 +85,9 @@ function createWindow(port) {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    frame: process.platform === "darwin",
+    trafficLightPosition: { x: 16, y: 13 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -154,6 +157,17 @@ function createWindow(port) {
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+
+  // Window control IPC for frameless windows (Windows/Linux)
+  ipcMain.on("window-minimize", () => mainWindow?.minimize());
+  ipcMain.on("window-maximize", () => {
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow?.maximize();
+    }
+  });
+  ipcMain.on("window-close", () => mainWindow?.close());
 
   mainWindow.loadURL(`http://localhost:${port}`);
 
