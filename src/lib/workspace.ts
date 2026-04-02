@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import YAML from "yaml";
 import type {
@@ -10,7 +11,17 @@ import type {
   TreeNode,
 } from "./types";
 
-const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "./workspace-example";
+function getDefaultWorkspaceDir(): string {
+  const platform = process.platform;
+  if (platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "api-testing-client", "workspace");
+  } else if (platform === "win32") {
+    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "api-testing-client", "workspace");
+  }
+  return path.join(os.homedir(), ".local", "share", "api-testing-client", "workspace");
+}
+
+const WORKSPACE_DIR = process.env.WORKSPACE_DIR || getDefaultWorkspaceDir();
 
 function getWorkspaceDir(): string {
   return path.resolve(WORKSPACE_DIR);

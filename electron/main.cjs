@@ -17,8 +17,9 @@ if (!gotLock) {
 }
 
 function getWorkspaceDir() {
-  if (isDev) return undefined; // use default ./workspace-example
-  const dir = path.join(app.getPath("userData"), "workspace");
+  const dir = isDev
+    ? path.join(app.getPath("userData"), "workspace-dev")
+    : path.join(app.getPath("userData"), "workspace");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

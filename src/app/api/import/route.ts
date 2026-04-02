@@ -7,12 +7,7 @@ import {
   convertPostmanEnvironment,
   detectPostmanType,
 } from "@/lib/postman-converter";
-
-const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "./workspace-example";
-
-function getWorkspaceDir(): string {
-  return path.resolve(WORKSPACE_DIR);
-}
+import { getWorkspaceDir } from "@/lib/workspace";
 
 export async function POST(request: Request) {
   const json = await request.json();
