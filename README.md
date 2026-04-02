@@ -2,12 +2,13 @@
 
 A self-hosted, file-based API client. Like Postman, but everything is stored as YAML files in your codebase — git-friendly, diff-friendly, and fully version-controlled.
 
-Run it as a Docker container and open it in your browser. No accounts, no cloud sync, no vendor lock-in.
+Run it as a Docker container, use it in the browser, or install the desktop app on macOS or Windows. No accounts, no cloud sync, no vendor lock-in.
 
 ## Features
 
 - **File-based storage** — Collections, requests, and environments are YAML files on disk
 - **Git-friendly** — Human-readable diffs, branch per feature, PR reviews for API changes
+- **Desktop app** — Native Electron app for macOS (DMG) and Windows (installer & portable)
 - **Environments** — Switch between dev/staging/prod with variable substitution (`{{baseUrl}}`)
 - **Authentication** — Basic, Bearer, API Key, and OAuth 2.0 (Authorization Code, PKCE, Client Credentials, Password, Refresh Token)
 - **Variable substitution** — Use `{{variables}}` in URLs, headers, body, and auth fields
@@ -56,6 +57,60 @@ Open [http://localhost:3000](http://localhost:3000).
 pnpm build
 pnpm start
 ```
+
+## Desktop App (Electron)
+
+The API Client is also available as a native desktop application for macOS and Windows, built with Electron.
+
+### Download
+
+Pre-built installers are available on the [Releases](../../releases) page:
+
+| Platform | Formats |
+|----------|---------|
+| macOS (Apple Silicon) | `.dmg`, `.zip` |
+| macOS (Intel) | `.dmg`, `.zip` |
+| Windows | `.exe` (installer), `.exe` (portable) |
+
+### Building from source
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build the desktop app
+pnpm build:electron
+```
+
+Installers are output to the `dist/` directory.
+
+To build for a specific platform:
+
+```bash
+# macOS only
+pnpm build && pnpm exec electron-builder --mac
+
+# Windows only
+pnpm build && pnpm exec electron-builder --win
+```
+
+### Development
+
+```bash
+# Run Electron in dev mode (starts Next.js + Electron concurrently)
+pnpm dev:electron
+```
+
+### How it works
+
+The desktop app embeds a Next.js standalone server that runs locally. The Electron shell provides:
+
+- Native window management with system-level menu integration
+- Automatic workspace directory in your user data folder
+- OAuth 2.0 callback handling via the system browser
+- Single-instance enforcement (opening the app twice focuses the existing window)
+
+The workspace is stored at `~/.userData/workspace` (or `~/.userData/workspace-dev` in development).
 
 ## Workspace Structure
 
