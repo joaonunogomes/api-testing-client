@@ -11,6 +11,7 @@ import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
 import type { RequestFile } from "@/lib/types";
 import { parseCurl } from "@/lib/curl-parser";
 import { Select } from "./Select";
+import { MocksEditor } from "./MocksEditor";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 
@@ -24,7 +25,7 @@ const METHOD_COLORS: Record<string, string> = {
   HEAD: "text-method-head",
 };
 
-type Tab = "params" | "headers" | "body" | "auth" | "scripts";
+type Tab = "params" | "headers" | "body" | "auth" | "scripts" | "mocks";
 
 export function RequestEditor() {
   const {
@@ -135,12 +136,15 @@ export function RequestEditor() {
     ([key, value]) => ({ key, value, enabled: true }),
   );
 
+  const mockCount = localRequest.mocks?.length || 0;
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "params", label: "Params", count: paramPairs.length },
     { id: "headers", label: "Headers", count: headerPairs.length },
     { id: "body", label: "Body" },
     { id: "auth", label: "Auth" },
     { id: "scripts", label: "Scripts" },
+    { id: "mocks", label: "Mocks", count: mockCount },
   ];
 
   return (
@@ -264,6 +268,13 @@ export function RequestEditor() {
           <ScriptsEditor
             scripts={localRequest.scripts}
             onChange={(scripts) => updateRequest({ scripts })}
+          />
+        )}
+
+        {activeEditorTab === "mocks" && (
+          <MocksEditor
+            mocks={localRequest.mocks || []}
+            onChange={(mocks) => updateRequest({ mocks })}
           />
         )}
       </div>

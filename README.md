@@ -17,6 +17,7 @@ Run it as a Docker container, use it in the browser, or install the desktop app 
 - **Postman import** — Import Postman collections (v2.1) and environments, converted to native YAML
 - **Live reload** — Edit YAML files in your editor and the UI updates instantly via Server-Sent Events
 - **Multi-tab interface** — Open multiple requests in tabs with drag-to-reorder
+- **Mock server** — Start a mock HTTP server from any collection. Each request with mocks becomes a route, serving defined responses on `localhost`
 - **cURL generation** — Generate cURL commands from any request
 - **Docker-first** — Single container, mount your workspace as a volume
 - **No database** — Everything lives in files. Back up by pushing to git.
@@ -194,6 +195,35 @@ scripts:
     bru.setVar("firstPetId", data[0]?.id);
 ```
 
+#### Request with mock responses
+
+Mocks define canned responses that the mock server will serve. Each request can have multiple named mocks.
+
+```yaml
+meta:
+  name: Get Pet
+request:
+  method: GET
+  url: "{{baseUrl}}/pets/:id"
+
+mocks:
+  - name: Found
+    isDefault: true
+    response:
+      status: 200
+      headers:
+        Content-Type: application/json
+      body: |
+        {"id": 1, "name": "Buddy", "species": "dog"}
+  - name: Not Found
+    response:
+      status: 404
+      headers:
+        Content-Type: application/json
+      body: |
+        {"error": "Pet not found"}
+```
+
 #### Request with body and auth override
 
 ```yaml
@@ -349,6 +379,38 @@ scripts:
 | `res.headers` | Response headers |
 | `console.log/warn/error` | Output captured and shown in UI |
 
+## Mock Server
+
+Start a mock HTTP server directly from any collection. Each request that has mocks defined becomes a route on the server, serving the default mock response.
+
+### How it works
+
+1. Define mocks on your requests in the **Mocks** tab (or click **Save as Mock** on any response)
+2. Open the collection settings and go to the **Mock Server** tab
+3. Click **Start Mock Server** — a local HTTP server starts on `localhost`
+4. The route path is derived by stripping `{{baseUrl}}` from each request URL
+
+### Selecting a specific mock
+
+By default, the mock marked `isDefault: true` (or the first one) is returned. To request a specific mock, send the `x-mock-response-name` header:
+
+```bash
+# Returns the default mock
+curl http://localhost:9001/pets/1
+
+# Returns the "Not Found" mock
+curl -H "x-mock-response-name: Not Found" http://localhost:9001/pets/1
+```
+
+### Features
+
+- **CORS enabled** — use the mock server as a backend for frontend development
+- **Path parameters** — `:id` segments in URLs are matched dynamically
+- **Variable substitution** — `{{$guid}}`, `{{$timestamp}}`, and collection variables work in mock bodies
+- **Hot-reload** — edit mocks in the UI or YAML files, and the running server picks up changes
+- **Request log** — see incoming requests in real-time in the Mock Server tab
+- **localhost only** — the server binds to `127.0.0.1` and is not exposed to the internet
+
 ## Importing from Postman
 
 You can import Postman collections (v2.1 format) and environments directly from the UI. The importer converts them to native YAML files in your workspace.
@@ -379,6 +441,11 @@ The backend exposes a REST API that the frontend consumes. You can also use it p
 | `POST` | `/api/import` | Import a Postman collection or environment |
 | `POST` | `/api/oauth2/token` | OAuth 2.0 token exchange |
 | `GET` | `/api/oauth2/callback` | OAuth 2.0 callback handler |
+| `GET` | `/api/mock-server` | Get status of all running mock servers |
+| `POST` | `/api/mock-server` | Start a mock server for a collection |
+| `DELETE` | `/api/mock-server` | Stop a mock server |
+| `PATCH` | `/api/mock-server` | Reload routes for a running mock server |
+| `GET` | `/api/mock-server/log?collectionId=x` | SSE stream of mock server request logs |
 | `GET` | `/api/events` | Server-Sent Events for live file changes |
 
 ### Execute a request

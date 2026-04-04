@@ -18,11 +18,13 @@ function TreeNodeItem({
   depth,
   collectionId,
   isLinked,
+  isMockRunning,
 }: {
   node: TreeNode;
   depth: number;
   collectionId: string;
   isLinked?: boolean;
+  isMockRunning?: boolean;
 }) {
   const {
     expandedNodes,
@@ -78,6 +80,12 @@ function TreeNodeItem({
 
         <span className="truncate flex-1">{node.name}</span>
 
+        {node.type === "collection" && isMockRunning && (
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-success animate-pulse flex-shrink-0"
+            title="Mock server running"
+          />
+        )}
         {node.type === "collection" && isLinked && (
           <span
             className="text-[9px] text-accent/60 flex-shrink-0"
@@ -105,12 +113,18 @@ function TreeNodeItem({
 }
 
 export function CollectionTree({ collection }: { collection: Collection }) {
+  const { mockServers } = useAppStore();
+  const isMockRunning = mockServers.some(
+    (s) => s.collectionId === collection.id && s.running,
+  );
+
   return (
     <TreeNodeItem
       node={collection.tree}
       depth={0}
       collectionId={collection.id}
       isLinked={!!collection.linkedPath}
+      isMockRunning={isMockRunning}
     />
   );
 }

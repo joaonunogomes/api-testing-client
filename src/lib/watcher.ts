@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from "chokidar";
 import { getWorkspaceDir } from "./workspace";
+import { getMockServerStatuses, reloadMockServer } from "./mock-server";
 
 type ChangeCallback = (event: string, path: string) => void;
 
@@ -21,6 +22,12 @@ export function startWatcher(): void {
     if (!filePath.endsWith(".yaml")) return;
     for (const listener of listeners) {
       listener(event, filePath);
+    }
+
+    // Auto-reload running mock servers when collection files change
+    const servers = getMockServerStatuses();
+    for (const server of servers) {
+      reloadMockServer(server.collectionId);
     }
   });
 }

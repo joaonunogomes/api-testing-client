@@ -6,9 +6,9 @@ import { KeyValueEditor } from "./KeyValueEditor";
 import { AuthEditor } from "./AuthEditor";
 import { ScriptCodeEditor } from "./ScriptCodeEditor";
 import { useConfirm } from "./ConfirmDialog";
-import type { AuthConfig, Collection } from "@/lib/types";
+import type { AuthConfig, Collection, MockServerStatus, MockServerLogEntry } from "@/lib/types";
 
-type Tab = "variables" | "defaults" | "auth" | "scripts" | "storage";
+type Tab = "variables" | "defaults" | "auth" | "scripts" | "mock-server" | "storage";
 
 interface CollectionFormState {
   name: string;
@@ -30,6 +30,11 @@ export function CollectionSettings({ collectionId }: { collectionId: string }) {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [isLinkingToRepo, setIsLinkingToRepo] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
+  const [mockServerStatus, setMockServerStatus] = useState<MockServerStatus | null>(null);
+  const [mockServerPort, setMockServerPort] = useState("");
+  const [mockServerError, setMockServerError] = useState<string | null>(null);
+  const [mockServerStarting, setMockServerStarting] = useState(false);
+  const [mockServerLogs, setMockServerLogs] = useState<MockServerLogEntry[]>([]);
   const [form, setForm] = useState<CollectionFormState>({
     name: "",
     description: "",
@@ -61,6 +66,42 @@ export function CollectionSettings({ collectionId }: { collectionId: string }) {
   useEffect(() => {
     if (collection) loadFromCollection(collection);
   }, [collection, loadFromCollection]);
+
+  // Poll mock server status
+  useEffect(() => {
+    let cancelled = false;
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/mock-server?collectionId=${collectionId}`);
+        if (!cancelled) {
+          const data = await res.json();
+          setMockServerStatus(data.status || null);
+          setMockServerLogs(data.logs || []);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [collectionId]);
+
+  // SSE log stream when mock server is running
+  useEffect(() => {
+    if (!mockServerStatus?.running) return;
+
+    const es = new EventSource(`/api/mock-server/log?collectionId=${collectionId}`);
+    es.onmessage = (e) => {
+      try {
+        const entry: MockServerLogEntry = JSON.parse(e.data);
+        setMockServerLogs((prev) => [...prev.slice(-199), entry]);
+      } catch {
+        // ignore
+      }
+    };
+    return () => es.close();
+  }, [collectionId, mockServerStatus?.running]);
 
   if (!collection) return null;
 
@@ -184,11 +225,48 @@ export function CollectionSettings({ collectionId }: { collectionId: string }) {
     closeTab(`__collection__${collection.id}`);
   };
 
+  const handleStartMockServer = async () => {
+    setMockServerStarting(true);
+    setMockServerError(null);
+    try {
+      const res = await fetch("/api/mock-server", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collectionId,
+          port: mockServerPort ? Number(mockServerPort) : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMockServerStatus(data);
+      setMockServerLogs([]);
+    } catch (e) {
+      setMockServerError(e instanceof Error ? e.message : "Failed to start");
+    }
+    setMockServerStarting(false);
+  };
+
+  const handleStopMockServer = async () => {
+    try {
+      await fetch("/api/mock-server", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionId }),
+      });
+      setMockServerStatus(null);
+      setMockServerLogs([]);
+    } catch {
+      // ignore
+    }
+  };
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "variables", label: "Variables" },
     { id: "defaults", label: "Default Headers" },
     { id: "auth", label: "Auth" },
     { id: "scripts", label: "Scripts" },
+    { id: "mock-server", label: "Mock Server" },
     { id: "storage", label: "Storage" },
   ];
 
@@ -310,6 +388,155 @@ export function CollectionSettings({ collectionId }: { collectionId: string }) {
           </div>
         )}
 
+        {activeTab === "mock-server" && (
+          <div className="space-y-4">
+            {mockServerStatus?.running ? (
+              <>
+                <div className="bg-bg-tertiary border border-border rounded p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                      <span className="text-sm text-text-primary font-medium">
+                        Mock server running
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleStopMockServer}
+                      className="text-xs text-error/70 hover:text-error transition-colors"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-text-secondary">
+                    <span>
+                      URL:{" "}
+                      <code className="text-accent font-mono">
+                        http://localhost:{mockServerStatus.port}
+                      </code>
+                    </span>
+                    <span>{mockServerStatus.routes} route(s)</span>
+                  </div>
+                </div>
+
+                {/* Request Log */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-text-muted uppercase tracking-wide">
+                      Request Log
+                    </span>
+                    {mockServerLogs.length > 0 && (
+                      <button
+                        onClick={() => setMockServerLogs([])}
+                        className="text-xs text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {mockServerLogs.length === 0 ? (
+                    <p className="text-xs text-text-muted">
+                      No requests received yet. Try:{" "}
+                      <code className="text-accent">
+                        curl http://localhost:{mockServerStatus.port}/
+                      </code>
+                    </p>
+                  ) : (
+                    <div className="border border-border rounded overflow-hidden max-h-64 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-bg-tertiary border-b border-border text-text-muted">
+                            <th className="text-left px-2 py-1.5 font-medium">
+                              Time
+                            </th>
+                            <th className="text-left px-2 py-1.5 font-medium">
+                              Method
+                            </th>
+                            <th className="text-left px-2 py-1.5 font-medium">
+                              Path
+                            </th>
+                            <th className="text-left px-2 py-1.5 font-medium">
+                              Status
+                            </th>
+                            <th className="text-left px-2 py-1.5 font-medium">
+                              Mock
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...mockServerLogs].reverse().map((log, i) => (
+                            <tr
+                              key={i}
+                              className="border-b border-border last:border-0"
+                            >
+                              <td className="px-2 py-1 text-text-muted font-mono">
+                                {new Date(log.timestamp).toLocaleTimeString()}
+                              </td>
+                              <td className="px-2 py-1 text-text-primary font-mono">
+                                {log.method}
+                              </td>
+                              <td className="px-2 py-1 text-text-secondary font-mono">
+                                {log.path}
+                              </td>
+                              <td
+                                className={`px-2 py-1 font-mono ${
+                                  log.status >= 200 && log.status < 300
+                                    ? "text-success"
+                                    : log.status >= 400
+                                      ? "text-error"
+                                      : "text-warning"
+                                }`}
+                              >
+                                {log.status}
+                              </td>
+                              <td className="px-2 py-1 text-text-muted">
+                                {log.matched ? log.mockName : "No match"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-text-muted">
+                  Start a mock server to serve mock responses defined on this
+                  collection&apos;s requests. Each request with mocks becomes a
+                  route on the server.
+                </p>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">
+                    Port (leave empty for auto-assign)
+                  </label>
+                  <input
+                    type="text"
+                    value={mockServerPort}
+                    onChange={(e) => setMockServerPort(e.target.value)}
+                    placeholder="e.g. 9001"
+                    className="w-32 bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent font-mono"
+                  />
+                </div>
+                <button
+                  onClick={handleStartMockServer}
+                  disabled={mockServerStarting}
+                  className="bg-accent text-bg-primary px-4 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+                >
+                  {mockServerStarting
+                    ? "Starting..."
+                    : "Start Mock Server"}
+                </button>
+                {mockServerError && (
+                  <div className="bg-error/10 border border-error/30 rounded p-2 text-xs text-error">
+                    {mockServerError}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {activeTab === "storage" && (
           <div className="space-y-4">
             {collection.linkedPath ? (
@@ -386,22 +613,24 @@ export function CollectionSettings({ collectionId }: { collectionId: string }) {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-border flex-shrink-0">
-        <button
-          onClick={handleDelete}
-          className="text-xs text-error/70 hover:text-error transition-colors"
-        >
-          Delete Collection
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-accent text-bg-primary px-4 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
-        >
-          {isSaving ? "Saving..." : "Save"}
-        </button>
-      </div>
+      {/* Footer — hidden on mock-server tab since it only has start/stop */}
+      {activeTab !== "mock-server" && (
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border flex-shrink-0">
+          <button
+            onClick={handleDelete}
+            className="text-xs text-error/70 hover:text-error transition-colors"
+          >
+            Delete Collection
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="bg-accent text-bg-primary px-4 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+          >
+            {isSaving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

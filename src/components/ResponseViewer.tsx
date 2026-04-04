@@ -31,9 +31,10 @@ function formatSize(bytes: number): string {
 }
 
 export function ResponseViewer() {
-  const { openTabs, activeTabId } = useAppStore();
+  const { openTabs, activeTabId, updateTabRequest } = useAppStore();
   const [activeTab, setActiveTab] = useState<ResponseTab>("body");
   const [copiedCurl, setCopiedCurl] = useState(false);
+  const [savedMock, setSavedMock] = useState(false);
 
   const tab = openTabs.find((t) => t.id === activeTabId);
   const response = tab?.response ?? null;
@@ -91,6 +92,36 @@ export function ResponseViewer() {
     setTimeout(() => setCopiedCurl(false), 2000);
   };
 
+  const handleSaveAsMock = () => {
+    if (!tab?.request || !activeTabId) return;
+    const existingMocks = tab.request.mocks || [];
+    const mockName = `${response.status} Response`;
+    // Avoid duplicate names
+    let name = mockName;
+    let counter = 1;
+    while (existingMocks.some((m) => m.name === name)) {
+      counter++;
+      name = `${mockName} (${counter})`;
+    }
+    const isFirst = existingMocks.length === 0;
+    const newMock = {
+      name,
+      isDefault: isFirst,
+      response: {
+        status: response.status,
+        statusText: response.statusText,
+        headers: { ...response.headers },
+        body: response.body,
+      },
+    };
+    updateTabRequest(activeTabId, {
+      ...tab.request,
+      mocks: [...existingMocks, newMock],
+    });
+    setSavedMock(true);
+    setTimeout(() => setSavedMock(false), 2000);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Status bar */}
@@ -100,6 +131,14 @@ export function ResponseViewer() {
         </span>
         <span className="text-text-muted">{response.time} ms</span>
         <span className="text-text-muted">{formatSize(response.size)}</span>
+        <div className="ml-auto">
+          <button
+            onClick={handleSaveAsMock}
+            className="text-xs text-text-muted hover:text-accent transition-colors"
+          >
+            {savedMock ? "Saved!" : "Save as Mock"}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

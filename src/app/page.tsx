@@ -9,7 +9,7 @@ import { ResponseViewer } from "@/components/ResponseViewer";
 import { CollectionSettings } from "@/components/CollectionSettings";
 
 export default function Home() {
-  const { fetchCollections, fetchEnvironments } = useAppStore();
+  const { fetchCollections, fetchEnvironments, fetchMockServers } = useAppStore();
   const [responseHeight, setResponseHeight] = useState(300);
   const [isDragging, setIsDragging] = useState(false);
   const [electronPlatform, setElectronPlatform] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function Home() {
 
   useEffect(() => {
     const init = async () => {
-      await Promise.all([fetchCollections(), fetchEnvironments()]);
+      await Promise.all([fetchCollections(), fetchEnvironments(), fetchMockServers()]);
       // Restore tabs and environment after data is loaded
       await useAppStore.getState().restoreSession();
     };
@@ -65,8 +65,14 @@ export default function Home() {
       fetchEnvironments();
     };
 
-    return () => eventSource.close();
-  }, [fetchCollections, fetchEnvironments]);
+    // Poll mock server statuses periodically
+    const mockInterval = setInterval(fetchMockServers, 10000);
+
+    return () => {
+      eventSource.close();
+      clearInterval(mockInterval);
+    };
+  }, [fetchCollections, fetchEnvironments, fetchMockServers]);
 
   // Handle vertical resize
   useEffect(() => {

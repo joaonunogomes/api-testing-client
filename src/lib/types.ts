@@ -71,6 +71,17 @@ export interface Scripts {
   "post-response"?: string;
 }
 
+export interface MockResponse {
+  name: string;
+  isDefault?: boolean;
+  response: {
+    status: number;
+    statusText?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  };
+}
+
 export interface RequestFile {
   meta: {
     name: string;
@@ -79,6 +90,7 @@ export interface RequestFile {
   };
   request: RequestDef;
   scripts?: Scripts;
+  mocks?: MockResponse[];
 }
 
 export interface CollectionFile {
@@ -158,4 +170,26 @@ export interface OAuth2TokenState {
   scope?: string;
   acquiredAt: number;
   error?: string;
+}
+
+export interface MockServerConfig {
+  port?: number;
+  delay?: number;
+  cors?: boolean;
+}
+
+export interface MockServerStatus {
+  collectionId: string;
+  port: number;
+  running: boolean;
+  routes: number;
+}
+
+export interface MockServerLogEntry {
+  timestamp: number;
+  method: string;
+  path: string;
+  matched: boolean;
+  mockName?: string;
+  status: number;
 }

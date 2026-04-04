@@ -5,6 +5,7 @@ import type {
   ExecuteResponse,
   RequestFile,
   OAuth2TokenState,
+  MockServerStatus,
 } from "@/lib/types";
 
 export interface OpenTab {
@@ -35,6 +36,9 @@ interface AppState {
   // OAuth2 tokens
   oauth2Tokens: Map<string, OAuth2TokenState>;
 
+  // Mock servers
+  mockServers: MockServerStatus[];
+
   // UI state
   sidebarWidth: number;
   expandedNodes: Set<string>;
@@ -46,6 +50,8 @@ interface AppState {
   toggleNode: (nodeId: string) => void;
   setSidebarWidth: (width: number) => void;
   setOAuth2Token: (tokenKey: string, token: OAuth2TokenState) => void;
+  setMockServers: (servers: MockServerStatus[]) => void;
+  fetchMockServers: () => Promise<void>;
 
   // Tab actions
   openNewTab: () => void;
@@ -126,6 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   environments: [],
   selectedEnvironmentId: savedSession?.selectedEnvironmentId ?? null,
   oauth2Tokens: new Map(),
+  mockServers: [],
   sidebarWidth: 280,
   expandedNodes: new Set(savedSession?.expandedNodes ?? []),
 
@@ -152,6 +159,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       tokens.set(tokenKey, token);
       return { oauth2Tokens: tokens };
     }),
+
+  setMockServers: (servers) => set({ mockServers: servers }),
+
+  fetchMockServers: async () => {
+    try {
+      const res = await fetch("/api/mock-server");
+      const servers = await res.json();
+      set({ mockServers: servers });
+    } catch {
+      // ignore
+    }
+  },
 
   // --- Tab actions ---
 
@@ -234,23 +253,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!res.ok) return;
     const request: RequestFile = await res.json();
 
-    set((s) => ({
-      openTabs: [
-        ...s.openTabs,
-        {
-          id: tabId,
-          collectionId,
-          requestId,
-          label: request.meta?.name || requestId.split("/").pop() || requestId,
-          method: request.request?.method || "GET",
-          request,
-          response: null,
-          isExecuting: false,
-          isDirty: false,
-        },
-      ],
-      activeTabId: tabId,
-    }));
+    // Re-check after async fetch to avoid duplicates from concurrent calls
+    set((s) => {
+      if (s.openTabs.some((t) => t.id === tabId)) {
+        return { activeTabId: tabId };
+      }
+      return {
+        openTabs: [
+          ...s.openTabs,
+          {
+            id: tabId,
+            collectionId,
+            requestId,
+            label: request.meta?.name || requestId.split("/").pop() || requestId,
+            method: request.request?.method || "GET",
+            request,
+            response: null,
+            isExecuting: false,
+            isDirty: false,
+          },
+        ],
+        activeTabId: tabId,
+      };
+    });
   },
 
   closeTab: (tabId) =>
