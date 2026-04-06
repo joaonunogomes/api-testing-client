@@ -3,12 +3,13 @@
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAppStore } from "@/stores/app-store";
+import { generators } from "@/lib/variables";
 
 /**
  * Collect all available variables (name -> value) from the active collection + environment.
  */
 function useAvailableVars(collectionId: string | null): Map<string, string> {
-  const { collections, environments, selectedEnvironmentId } = useAppStore();
+  const { collections, environments, selectedEnvironmentId, sessionRuntimeVars, sessionEnvOverrides } = useAppStore();
 
   return useMemo(() => {
     const vars = new Map<string, string>();
@@ -24,15 +25,17 @@ function useAvailableVars(collectionId: string | null): Map<string, string> {
       for (const [k, v] of Object.entries(env.secrets)) vars.set(k, v ? "••••••" : "(empty)");
     }
 
-    // Built-in dynamic variables
-    vars.set("$guid", "(generated UUID)");
-    vars.set("$timestamp", "(unix timestamp)");
-    vars.set("$isoTimestamp", "(ISO datetime)");
-    vars.set("$randomInt", "(random 0-999999)");
-    vars.set("$randomCompanyName", "(random name)");
+    // Session-scoped variables set by scripts (ac.env.set / ac.setVar)
+    for (const [k, v] of Object.entries(sessionEnvOverrides)) vars.set(k, v);
+    for (const [k, v] of Object.entries(sessionRuntimeVars)) vars.set(k, v);
+
+    // Generator functions — {{generate 'type'}}
+    for (const [type, gen] of Object.entries(generators)) {
+      vars.set(`generate '${type}'`, gen.description);
+    }
 
     return vars;
-  }, [collections, environments, collectionId, selectedEnvironmentId]);
+  }, [collections, environments, collectionId, selectedEnvironmentId, sessionRuntimeVars, sessionEnvOverrides]);
 }
 
 function Tooltip({

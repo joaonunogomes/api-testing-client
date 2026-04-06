@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppStore } from "@/stores/app-store";
-import { JsonHighlight } from "./SyntaxHighlight";
+import type CodeMirrorType from "@uiw/react-codemirror";
 
 type ResponseTab = "body" | "headers" | "tests" | "console";
 
@@ -35,6 +35,29 @@ export function ResponseViewer() {
   const [activeTab, setActiveTab] = useState<ResponseTab>("body");
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [savedMock, setSavedMock] = useState(false);
+
+  const [CodeMirror, setCodeMirror] = useState<typeof CodeMirrorType | null>(null);
+  const [cmExtensions, setCmExtensions] = useState<
+    { oneDark: unknown; json: () => unknown; xml: () => unknown; search: () => unknown } | null
+  >(null);
+
+  useEffect(() => {
+    Promise.all([
+      import("@uiw/react-codemirror"),
+      import("@codemirror/theme-one-dark"),
+      import("@codemirror/lang-json"),
+      import("@codemirror/lang-xml"),
+      import("@codemirror/search"),
+    ]).then(([cm, theme, jsonMod, xmlMod, searchMod]) => {
+      setCodeMirror(() => cm.default);
+      setCmExtensions({
+        oneDark: theme.oneDark,
+        json: jsonMod.json,
+        xml: xmlMod.xml,
+        search: searchMod.search,
+      });
+    });
+  }, []);
 
   const tab = openTabs.find((t) => t.id === activeTabId);
   const response = tab?.response ?? null;
@@ -167,9 +190,33 @@ export function ResponseViewer() {
       {/* Tab Content */}
       <div className="flex-1 overflow-auto">
         {activeTab === "body" && (
-          isJson
-            ? <JsonHighlight code={formattedBody} />
-            : <pre className="p-3 text-sm font-mono text-text-primary whitespace-pre-wrap break-words">{formattedBody}</pre>
+          CodeMirror && cmExtensions ? (
+            <CodeMirror
+              value={formattedBody}
+              readOnly
+              editable={false}
+              theme={cmExtensions.oneDark as import("@codemirror/state").Extension}
+              extensions={[
+                isJson
+                  ? (cmExtensions.json as () => import("@codemirror/state").Extension)()
+                  : contentType.includes("xml")
+                    ? (cmExtensions.xml as () => import("@codemirror/state").Extension)()
+                    : [],
+                (cmExtensions.search as () => import("@codemirror/state").Extension)(),
+              ].flat()}
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: true,
+                highlightActiveLine: false,
+              }}
+              style={{
+                fontSize: "13px",
+                height: "100%",
+              }}
+            />
+          ) : (
+            <pre className="p-3 text-sm font-mono text-text-primary whitespace-pre-wrap break-words">{formattedBody}</pre>
+          )
         )}
 
         {activeTab === "headers" && (

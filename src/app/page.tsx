@@ -25,7 +25,7 @@ export default function Home() {
   const activeTab = openTabs.find((t) => t.id === activeTabId);
   const isCollectionSettings = activeTab?.type === "collection-settings";
 
-  // Cmd+W / Ctrl+W closes the active tab instead of the window
+  // Global keyboard shortcuts
   useEffect(() => {
     const closeActiveTab = () => {
       const tabId = useAppStore.getState().activeTabId;
@@ -34,11 +34,27 @@ export default function Home() {
       }
     };
 
-    // Handle from keyboard directly (works in browser/dev mode)
+    const saveActiveTab = () => {
+      const state = useAppStore.getState();
+      const tab = state.openTabs.find((t) => t.id === state.activeTabId);
+      if (!tab) return;
+
+      if (tab.type === "collection-settings") {
+        // Dispatch event for CollectionSettings to handle its own save
+        window.dispatchEvent(new CustomEvent("app:save"));
+      } else if (tab.collectionId && tab.request) {
+        state.saveTab(tab.id);
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
         e.preventDefault();
         closeActiveTab();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        saveActiveTab();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -114,11 +130,19 @@ export default function Home() {
           </h1>
         </div>
         <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
-              Ctrl+Enter
-            </kbd>
-            <span>to send</span>
+          <div className="flex items-center gap-3 text-xs text-text-muted">
+            <span>
+              <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
+                Ctrl+S
+              </kbd>
+              {" save"}
+            </span>
+            <span>
+              <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
+                Ctrl+Enter
+              </kbd>
+              {" send"}
+            </span>
           </div>
           {isElectronNonMac && (
             <div className="flex items-center ml-4">

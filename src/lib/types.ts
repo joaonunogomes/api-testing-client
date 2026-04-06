@@ -57,13 +57,39 @@ export interface RequestBody {
   content?: string;
 }
 
+export interface KeyValuePair {
+  key: string;
+  value: string;
+  enabled?: boolean;
+}
+
 export interface RequestDef {
   method: string;
   url: string;
-  params?: Record<string, string>;
-  headers?: Record<string, string>;
+  params?: KeyValuePair[];
+  headers?: KeyValuePair[];
   auth?: AuthConfig;
   body?: RequestBody;
+}
+
+/** Convert a Record (from YAML) or array to KeyValuePair[]. */
+export function normalizeKVPairs(
+  data: KeyValuePair[] | Record<string, string> | undefined,
+): KeyValuePair[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return Object.entries(data).map(([key, value]) => ({ key, value, enabled: true }));
+}
+
+/** Convert KeyValuePair[] to a clean Record for YAML persistence. */
+export function kvPairsToRecord(pairs: KeyValuePair[]): Record<string, string> {
+  const record: Record<string, string> = {};
+  for (const p of pairs) {
+    if (p.enabled !== false && p.key) {
+      record[p.key] = p.value;
+    }
+  }
+  return record;
 }
 
 export interface Scripts {
@@ -153,6 +179,8 @@ export interface ExecuteResponse {
   testResults?: TestResult[];
   consoleOutput?: string[];
   curl?: string;
+  runtimeVars?: Record<string, string>;
+  envOverrides?: Record<string, string>;
 }
 
 export interface TestResult {

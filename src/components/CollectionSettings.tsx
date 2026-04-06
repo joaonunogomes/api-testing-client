@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { AuthEditor } from "./AuthEditor";
@@ -152,6 +152,15 @@ export function CollectionSettings({ collectionId }: { collectionId: string }) {
     await fetchCollections();
     setIsSaving(false);
   };
+
+  // Allow global Ctrl+S to trigger save
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+  useEffect(() => {
+    const handler = () => handleSaveRef.current();
+    window.addEventListener("app:save", handler);
+    return () => window.removeEventListener("app:save", handler);
+  }, []);
 
   const handleLinkToRepo = async () => {
     if (!repoPath.trim()) return;

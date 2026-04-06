@@ -1,4 +1,4 @@
-import type { RequestDef } from "./types";
+import type { KeyValuePair, RequestDef } from "./types";
 
 /**
  * Parse a curl command string into a RequestDef.
@@ -19,7 +19,8 @@ export function parseCurl(raw: string): RequestDef | null {
 
   let method = "";
   let url = "";
-  const headers: Record<string, string> = {};
+  const headers: KeyValuePair[] = [];
+  const headerMap: Record<string, string> = {}; // for lookups
   let bodyContent: string | undefined;
   let authUser: string | undefined;
 
@@ -34,7 +35,8 @@ export function parseCurl(raw: string): RequestDef | null {
       if (colonIdx > 0) {
         const key = hdr.slice(0, colonIdx).trim();
         const value = hdr.slice(colonIdx + 1).trim();
-        headers[key] = value;
+        headers.push({ key, value, enabled: true });
+        headerMap[key] = value;
       }
     } else if (
       tok === "-d" ||
@@ -46,9 +48,11 @@ export function parseCurl(raw: string): RequestDef | null {
       tok === "--json"
     ) {
       bodyContent = tokens[++i] ?? "";
-      if (tok === "--json" && !headers["Content-Type"] && !headers["content-type"]) {
-        headers["Content-Type"] = "application/json";
-        headers["Accept"] = "application/json";
+      if (tok === "--json" && !headerMap["Content-Type"] && !headerMap["content-type"]) {
+        headers.push({ key: "Content-Type", value: "application/json", enabled: true });
+        headers.push({ key: "Accept", value: "application/json", enabled: true });
+        headerMap["Content-Type"] = "application/json";
+        headerMap["Accept"] = "application/json";
       }
     } else if (tok === "-u" || tok === "--user") {
       authUser = tokens[++i] ?? "";
@@ -92,11 +96,11 @@ export function parseCurl(raw: string): RequestDef | null {
   if (!url) return null;
 
   // Extract query params from URL
-  const params: Record<string, string> = {};
+  const params: KeyValuePair[] = [];
   try {
     const parsed = new URL(url);
     parsed.searchParams.forEach((v, k) => {
-      params[k] = v;
+      params.push({ key: k, value: v, enabled: true });
     });
     // Remove query string from the URL so it lives in params
     if (parsed.search) {
@@ -113,7 +117,7 @@ export function parseCurl(raw: string): RequestDef | null {
 
   // Detect body type from Content-Type header
   const contentType =
-    headers["Content-Type"] || headers["content-type"] || "";
+    headerMap["Content-Type"] || headerMap["content-type"] || "";
   let bodyType: "json" | "form" | "xml" | "text" | "none" = "none";
   if (bodyContent) {
     if (contentType.includes("application/json")) {
@@ -136,14 +140,15 @@ export function parseCurl(raw: string): RequestDef | null {
   }
 
   // Remove Content-Type from headers — the body editor controls it
-  delete headers["Content-Type"];
-  delete headers["content-type"];
+  const filteredHeaders = headers.filter(
+    (h) => h.key !== "Content-Type" && h.key !== "content-type",
+  );
 
   const result: RequestDef = {
     method,
     url,
-    ...(Object.keys(params).length > 0 ? { params } : {}),
-    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    ...(params.length > 0 ? { params } : {}),
+    ...(filteredHeaders.length > 0 ? { headers: filteredHeaders } : {}),
     body: bodyContent
       ? { type: bodyType, content: bodyContent }
       : { type: "none" },
@@ -160,14 +165,18 @@ export function parseCurl(raw: string): RequestDef | null {
   }
 
   // Handle Bearer auth from Authorization header
-  const authHeader = headers["Authorization"] || headers["authorization"];
+  const authHeader = headerMap["Authorization"] || headerMap["authorization"];
   if (authHeader?.startsWith("Bearer ")) {
     result.auth = {
       type: "bearer",
       token: authHeader.slice(7),
     };
-    delete headers["Authorization"];
-    delete headers["authorization"];
+    // Remove auth headers from the list
+    if (result.headers) {
+      result.headers = result.headers.filter(
+        (h) => h.key !== "Authorization" && h.key !== "authorization",
+      );
+    }
   }
 
   return result;

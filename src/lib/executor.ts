@@ -3,9 +3,11 @@ import type {
   Collection,
   Environment,
   ExecuteResponse,
+  KeyValuePair,
   RequestFile,
   TestResult,
 } from "./types";
+import { normalizeKVPairs } from "./types";
 import { resolveVariables } from "./variables";
 
 function buildVariableContexts(
@@ -193,9 +195,11 @@ export async function executeRequest(
   collection: Collection | null,
   environment: Environment | null,
   oauth2Token?: string,
+  initialRuntimeVars?: Record<string, string>,
+  initialEnvOverrides?: Record<string, string>,
 ): Promise<ExecuteResponse> {
-  const runtimeVars: Record<string, string> = {};
-  const envOverrides: Record<string, string> = {};
+  const runtimeVars: Record<string, string> = { ...initialRuntimeVars };
+  const envOverrides: Record<string, string> = { ...initialEnvOverrides };
 
   if (oauth2Token) {
     runtimeVars["oauth2Token"] = oauth2Token;
@@ -254,24 +258,24 @@ export async function executeRequest(
   }
 
   // Apply request headers (override defaults)
-  if (requestFile.request.headers) {
-    for (const [k, v] of Object.entries(requestFile.request.headers)) {
-      const resolvedValue = resolveVariables(v, updatedContexts);
-      // Skip masked values
-      if (resolvedValue === "••••••") continue;
-      headers[resolveVariables(k, updatedContexts)] = resolvedValue;
-    }
+  const reqHeaders = normalizeKVPairs(requestFile.request.headers);
+  for (const pair of reqHeaders) {
+    if (pair.enabled === false || !pair.key) continue;
+    const resolvedValue = resolveVariables(pair.value, updatedContexts);
+    // Skip masked values
+    if (resolvedValue === "••••••") continue;
+    headers[resolveVariables(pair.key, updatedContexts)] = resolvedValue;
   }
 
   // Build URL with params
   const url = new URL(resolvedUrl);
-  if (requestFile.request.params) {
-    for (const [k, v] of Object.entries(requestFile.request.params)) {
-      url.searchParams.set(
-        resolveVariables(k, updatedContexts),
-        resolveVariables(v, updatedContexts),
-      );
-    }
+  const reqParams = normalizeKVPairs(requestFile.request.params);
+  for (const pair of reqParams) {
+    if (pair.enabled === false || !pair.key) continue;
+    url.searchParams.set(
+      resolveVariables(pair.key, updatedContexts),
+      resolveVariables(pair.value, updatedContexts),
+    );
   }
 
   // Apply auth
@@ -384,5 +388,7 @@ export async function executeRequest(
     testResults: allTestResults.length > 0 ? allTestResults : undefined,
     consoleOutput: allConsoleOutput.length > 0 ? allConsoleOutput : undefined,
     curl,
+    runtimeVars: Object.keys(runtimeVars).length > 0 ? runtimeVars : undefined,
+    envOverrides: Object.keys(envOverrides).length > 0 ? envOverrides : undefined,
   };
 }

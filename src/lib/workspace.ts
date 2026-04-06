@@ -10,6 +10,7 @@ import type {
   RequestFile,
   TreeNode,
 } from "./types";
+import { normalizeKVPairs, kvPairsToRecord } from "./types";
 
 function getDefaultWorkspaceDir(): string {
   const platform = process.platform;
@@ -443,7 +444,13 @@ export async function getRequest(
   const dir = await resolveCollectionDir(collectionId);
   if (!dir) return null;
   try {
-    return await readYaml<RequestFile>(path.join(dir, `${requestId}.yaml`));
+    const data = await readYaml<RequestFile>(path.join(dir, `${requestId}.yaml`));
+    if (data?.request) {
+      // Normalize Record<string,string> from YAML to KeyValuePair[]
+      data.request.params = normalizeKVPairs(data.request.params);
+      data.request.headers = normalizeKVPairs(data.request.headers);
+    }
+    return data;
   } catch {
     return null;
   }
@@ -456,8 +463,26 @@ export async function saveRequest(
 ): Promise<void> {
   const dir = await resolveCollectionDir(collectionId);
   if (!dir) return;
+  // Convert KeyValuePair[] back to Record for clean YAML
+  const toSave = {
+    ...data,
+    request: {
+      ...data.request,
+      params: data.request.params
+        ? kvPairsToRecord(normalizeKVPairs(data.request.params))
+        : undefined,
+      headers: data.request.headers
+        ? kvPairsToRecord(normalizeKVPairs(data.request.headers))
+        : undefined,
+    },
+  };
+  // Remove empty objects
+  if (toSave.request.params && Object.keys(toSave.request.params).length === 0)
+    delete (toSave.request as Record<string, unknown>).params;
+  if (toSave.request.headers && Object.keys(toSave.request.headers).length === 0)
+    delete (toSave.request as Record<string, unknown>).headers;
   const filePath = path.join(dir, `${requestId}.yaml`);
-  await writeYaml(filePath, data);
+  await writeYaml(filePath, toSave);
 }
 
 export async function deleteRequest(

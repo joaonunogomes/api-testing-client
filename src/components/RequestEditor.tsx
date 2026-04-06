@@ -9,6 +9,7 @@ import { ScriptsEditor } from "./ScriptsEditor";
 import { VariableInput } from "./VariableHighlight";
 import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
 import type { RequestFile } from "@/lib/types";
+import { normalizeKVPairs } from "@/lib/types";
 import { parseCurl } from "@/lib/curl-parser";
 import { Select } from "./Select";
 import { MocksEditor } from "./MocksEditor";
@@ -106,10 +107,10 @@ export function RequestEditor() {
           ...(parsed.params ? { params: parsed.params } : {}),
           ...(parsed.headers
             ? {
-                headers: {
-                  ...localRequest.request.headers,
+                headers: [
+                  ...normalizeKVPairs(localRequest.request.headers),
                   ...parsed.headers,
-                },
+                ],
               }
             : {}),
           ...(parsed.body ? { body: parsed.body } : {}),
@@ -129,12 +130,8 @@ export function RequestEditor() {
   };
   const handleSend = () => executeTab(tab.id);
 
-  const paramPairs = Object.entries(localRequest.request.params || {}).map(
-    ([key, value]) => ({ key, value, enabled: true }),
-  );
-  const headerPairs = Object.entries(localRequest.request.headers || {}).map(
-    ([key, value]) => ({ key, value, enabled: true }),
-  );
+  const paramPairs = normalizeKVPairs(localRequest.request.params);
+  const headerPairs = normalizeKVPairs(localRequest.request.headers);
 
   const mockCount = localRequest.mocks?.length || 0;
 
@@ -219,13 +216,7 @@ export function RequestEditor() {
           <KeyValueEditor
             pairs={paramPairs}
             onChange={(pairs) => {
-              const params: Record<string, string> = {};
-              pairs
-                .filter((p) => p.enabled !== false && p.key)
-                .forEach((p) => {
-                  params[p.key] = p.value;
-                });
-              updateRequestDef({ params });
+              updateRequestDef({ params: pairs });
             }}
             collectionId={tab.collectionId}
             keyPlaceholder="Parameter"
@@ -237,13 +228,7 @@ export function RequestEditor() {
           <KeyValueEditor
             pairs={headerPairs}
             onChange={(pairs) => {
-              const headers: Record<string, string> = {};
-              pairs
-                .filter((p) => p.enabled !== false && p.key)
-                .forEach((p) => {
-                  headers[p.key] = p.value;
-                });
-              updateRequestDef({ headers });
+              updateRequestDef({ headers: pairs });
             }}
             collectionId={tab.collectionId}
           />
@@ -253,6 +238,7 @@ export function RequestEditor() {
           <BodyEditor
             body={localRequest.request.body}
             onChange={(body) => updateRequestDef({ body })}
+            collectionId={tab.collectionId}
           />
         )}
 

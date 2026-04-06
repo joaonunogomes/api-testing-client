@@ -39,6 +39,10 @@ interface AppState {
   // Mock servers
   mockServers: MockServerStatus[];
 
+  // Session-scoped variables (set by scripts via ac.env.set / ac.setVar)
+  sessionRuntimeVars: Record<string, string>;
+  sessionEnvOverrides: Record<string, string>;
+
   // UI state
   sidebarWidth: number;
   expandedNodes: Set<string>;
@@ -133,6 +137,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedEnvironmentId: savedSession?.selectedEnvironmentId ?? null,
   oauth2Tokens: new Map(),
   mockServers: [],
+  sessionRuntimeVars: {},
+  sessionEnvOverrides: {},
   sidebarWidth: 280,
   expandedNodes: new Set(savedSession?.expandedNodes ?? []),
 
@@ -398,6 +404,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           body: JSON.stringify({
             requestData: tab.request,
             environmentId: state.selectedEnvironmentId,
+            runtimeVars: state.sessionRuntimeVars,
+            envOverrides: state.sessionEnvOverrides,
           }),
         });
         response = await res.json();
@@ -427,15 +435,20 @@ export const useAppStore = create<AppState>((set, get) => ({
             requestId: tab.requestId,
             environmentId: state.selectedEnvironmentId,
             oauth2Token,
+            runtimeVars: state.sessionRuntimeVars,
+            envOverrides: state.sessionEnvOverrides,
           }),
         });
         response = await res.json();
       }
 
+      // Accumulate session-scoped variables set by scripts
       set((s) => ({
         openTabs: s.openTabs.map((t) =>
           t.id === tabId ? { ...t, response, isExecuting: false } : t,
         ),
+        sessionRuntimeVars: { ...s.sessionRuntimeVars, ...response?.runtimeVars },
+        sessionEnvOverrides: { ...s.sessionEnvOverrides, ...response?.envOverrides },
       }));
     } catch (e) {
       set((s) => ({

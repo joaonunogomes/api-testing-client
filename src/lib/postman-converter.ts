@@ -2,6 +2,7 @@ import type {
   AuthConfig,
   CollectionFile,
   EnvironmentFile,
+  KeyValuePair,
   RequestBody,
   RequestFile,
   Scripts,
@@ -173,31 +174,31 @@ function convertUrl(url: PostmanUrl | string): string {
 
 function convertParams(
   url: PostmanUrl | string,
-): Record<string, string> | undefined {
+): KeyValuePair[] | undefined {
   if (typeof url === "string") return undefined;
   if (!url.query || url.query.length === 0) return undefined;
 
-  const params: Record<string, string> = {};
+  const params: KeyValuePair[] = [];
   for (const q of url.query) {
-    if (!q.disabled && q.key) {
-      params[q.key] = q.value;
+    if (q.key) {
+      params.push({ key: q.key, value: q.value, enabled: !q.disabled });
     }
   }
-  return Object.keys(params).length > 0 ? params : undefined;
+  return params.length > 0 ? params : undefined;
 }
 
 function convertHeaders(
   headers: PostmanHeader[] | undefined,
-): Record<string, string> | undefined {
+): KeyValuePair[] | undefined {
   if (!headers || headers.length === 0) return undefined;
 
-  const result: Record<string, string> = {};
+  const result: KeyValuePair[] = [];
   for (const h of headers) {
-    if (!h.disabled && h.key) {
-      result[h.key] = h.value;
+    if (h.key) {
+      result.push({ key: h.key, value: h.value, enabled: !h.disabled });
     }
   }
-  return Object.keys(result).length > 0 ? result : undefined;
+  return result.length > 0 ? result : undefined;
 }
 
 function convertBody(body: PostmanBody | undefined): RequestBody | undefined {

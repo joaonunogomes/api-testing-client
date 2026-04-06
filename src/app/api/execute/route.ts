@@ -8,7 +8,7 @@ import { executeRequest } from "@/lib/executor";
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { collectionId, requestId, environmentId, oauth2Token, requestData } =
+  const { collectionId, requestId, environmentId, oauth2Token, requestData, runtimeVars, envOverrides } =
     body;
 
   // Inline request data (e.g. from example/scratchpad tab)
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       ? await getEnvironment(environmentId)
       : null;
 
-    const result = await executeRequest(requestData, null, environment);
+    const result = await executeRequest(requestData, null, environment, undefined, runtimeVars, envOverrides);
     return NextResponse.json(result);
   }
 
@@ -46,6 +46,8 @@ export async function POST(request: Request) {
     collection,
     environment,
     oauth2Token,
+    runtimeVars,
+    envOverrides,
   );
 
   return NextResponse.json(result);
