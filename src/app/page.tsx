@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { Sidebar } from "@/components/Sidebar";
 import { TabBar } from "@/components/TabBar";
@@ -24,6 +24,22 @@ export default function Home() {
   const { closeTab, activeTabId, openTabs } = useAppStore();
   const activeTab = openTabs.find((t) => t.id === activeTabId);
   const isCollectionSettings = activeTab?.type === "collection-settings";
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"shortcuts" | "scripting">("shortcuts");
+
+  const isMac = typeof navigator !== "undefined" && navigator.platform?.includes("Mac");
+  const mod = isMac ? "⌘" : "Ctrl";
+
+  // Close shortcuts modal on Escape
+  const handleShortcutsKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") setShowShortcuts(false);
+  }, []);
+  useEffect(() => {
+    if (showShortcuts) {
+      window.addEventListener("keydown", handleShortcutsKeyDown);
+      return () => window.removeEventListener("keydown", handleShortcutsKeyDown);
+    }
+  }, [showShortcuts, handleShortcutsKeyDown]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -130,20 +146,19 @@ export default function Home() {
           </h1>
         </div>
         <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-          <div className="flex items-center gap-3 text-xs text-text-muted">
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
-                Ctrl+S
-              </kbd>
-              {" save"}
-            </span>
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-bg-secondary rounded border border-border">
-                Ctrl+Enter
-              </kbd>
-              {" send"}
-            </span>
-          </div>
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
+            title="Keyboard shortcuts"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="4" width="14" height="9" rx="1.5" />
+              <line x1="4" y1="7" x2="5" y2="7" />
+              <line x1="7.5" y1="7" x2="8.5" y2="7" />
+              <line x1="11" y1="7" x2="12" y2="7" />
+              <line x1="5" y1="10" x2="11" y2="10" />
+            </svg>
+          </button>
           {isElectronNonMac && (
             <div className="flex items-center ml-4">
               <button
@@ -205,6 +220,178 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* Settings modal */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="bg-bg-primary border border-border rounded-lg w-[520px] max-h-[80vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+              <h3 className="text-sm font-semibold text-text-primary">Reference</h3>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="text-text-muted hover:text-text-primary transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-border shrink-0">
+              {(["shortcuts", "scripting"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setSettingsTab(tab)}
+                  className={`px-4 py-2 text-sm transition-colors relative ${
+                    settingsTab === tab
+                      ? "text-text-primary"
+                      : "text-text-muted hover:text-text-secondary"
+                  }`}
+                >
+                  {tab === "shortcuts" ? "Keyboard Shortcuts" : "Scripting API"}
+                  {settingsTab === tab && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto px-5 py-4">
+              {settingsTab === "shortcuts" && (
+                <div className="space-y-3">
+                  {[
+                    { keys: `${mod}+Enter`, description: "Send request" },
+                    { keys: `${mod}+S`, description: "Save" },
+                    { keys: `${mod}+W`, description: "Close tab" },
+                    { keys: `${mod}+B`, description: "Beautify body" },
+                    { keys: `${mod}+F`, description: "Search in editor" },
+                  ].map((shortcut) => (
+                    <div key={shortcut.keys} className="flex items-center justify-between text-sm">
+                      <span className="text-text-secondary">{shortcut.description}</span>
+                      <kbd className="px-2 py-0.5 bg-bg-secondary rounded border border-border text-xs text-text-muted font-mono">
+                        {shortcut.keys}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {settingsTab === "scripting" && (
+                <div className="space-y-5 text-sm">
+                  <p className="text-text-muted">
+                    Available in <span className="text-accent">pre-request</span> and <span className="text-accent">post-response</span> scripts.
+                  </p>
+
+                  {/* ac.env */}
+                  <section>
+                    <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Environment Variables</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <code className="text-accent text-xs font-mono">ac.env.get(name)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Get a session-scoped environment variable.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">ac.env.set(name, value)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Set a session-scoped environment variable.</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ac.var */}
+                  <section>
+                    <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Collection Variables</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <code className="text-accent text-xs font-mono">ac.getVar(name)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Get a collection-scoped variable.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">ac.setVar(name, value)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Set a collection-scoped variable.</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Testing */}
+                  <section>
+                    <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Testing</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <code className="text-accent text-xs font-mono">ac.test(name, fn)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Define a named test assertion.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">ac.expect(value)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Create an assertion chain. Methods:</p>
+                        <div className="ml-3 mt-1 space-y-0.5 text-xs text-text-muted font-mono">
+                          <div>.toBe(expected)</div>
+                          <div>.toEqual(expected)</div>
+                          <div>.toBeDefined()</div>
+                          <div>.toBeTruthy()</div>
+                          <div>.toContain(substring)</div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Response — post-response only */}
+                  <section>
+                    <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">
+                      Response <span className="normal-case font-normal">(post-response only)</span>
+                    </h4>
+                    <div className="space-y-2">
+                      <div>
+                        <code className="text-accent text-xs font-mono">res.status</code>
+                        <p className="text-text-muted text-xs mt-0.5">HTTP status code.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">res.headers</code>
+                        <p className="text-text-muted text-xs mt-0.5">Response headers object.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">res.body</code>
+                        <p className="text-text-muted text-xs mt-0.5">Raw response body string.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">res.json()</code>
+                        <p className="text-text-muted text-xs mt-0.5">Parse response body as JSON.</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Console */}
+                  <section>
+                    <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Console</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <code className="text-accent text-xs font-mono">console.log(...args)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Log output to the Console tab.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">console.warn(...args)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Log a warning with [warn] prefix.</p>
+                      </div>
+                      <div>
+                        <code className="text-accent text-xs font-mono">console.error(...args)</code>
+                        <p className="text-text-muted text-xs mt-0.5">Log an error with [error] prefix.</p>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

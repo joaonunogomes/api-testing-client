@@ -194,7 +194,6 @@ export function ResponseViewer() {
             <CodeMirror
               value={formattedBody}
               readOnly
-              editable={false}
               theme={cmExtensions.oneDark as import("@codemirror/state").Extension}
               extensions={[
                 isJson

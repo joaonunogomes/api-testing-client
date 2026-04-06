@@ -57,3 +57,93 @@ body {
 input, textarea, select {
   font-family: inherit;
 }
+
+/* ── CodeMirror search panel ─────────────────────────────────────────── */
+
+.cm-panels {
+  background: var(--color-bg-tertiary) !important;
+  border-color: var(--color-border) !important;
+}
+
+.cm-panel.cm-search {
+  background: var(--color-bg-tertiary) !important;
+  padding: 8px 10px !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.cm-panel.cm-search input[type="text"],
+.cm-panel.cm-search input[main-field] {
+  background: var(--color-bg-primary) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  outline: none;
+}
+
+.cm-panel.cm-search input[type="text"]:focus {
+  border-color: var(--color-accent) !important;
+}
+
+.cm-panel.cm-search button {
+  background: var(--color-bg-hover) !important;
+  color: var(--color-text-secondary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cm-panel.cm-search button:hover {
+  background: var(--color-bg-active) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.cm-panel.cm-search button[name="close"] {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-text-muted) !important;
+  font-size: 16px;
+  padding: 2px 4px;
+}
+
+.cm-panel.cm-search button[name="close"]:hover {
+  color: var(--color-text-primary) !important;
+}
+
+.cm-panel.cm-search label {
+  color: var(--color-text-muted) !important;
+  font-size: 12px;
+}
+
+.cm-panel.cm-search input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.cm-panel.cm-search br {
+  display: none;
+}
+
+.cm-searchMatch {
+  background-color: rgba(137, 180, 250, 0.25) !important;
+  outline: 1px solid rgba(137, 180, 250, 0.4);
+  border-radius: 2px;
+}
+
+.cm-searchMatch-selected {
+  background-color: rgba(137, 180, 250, 0.45) !important;
+  outline: 1px solid var(--color-accent);
+}

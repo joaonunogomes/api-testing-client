@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { json } from "@codemirror/lang-json";
 import { xml } from "@codemirror/lang-xml";
 import { html } from "@codemirror/lang-html";
@@ -22,6 +22,7 @@ import {
 import { type Extension, RangeSetBuilder, Facet } from "@codemirror/state";
 import { search, openSearchPanel } from "@codemirror/search";
 import type CodeMirrorType from "@uiw/react-codemirror";
+import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import type { RequestBody } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
 import { generators } from "@/lib/variables";
@@ -249,6 +250,8 @@ export function BodyEditor({ body, onChange, collectionId }: BodyEditorProps) {
   const bodyType = body?.type || "none";
   const availableVars = useAvailableVars(collectionId);
 
+  const cmRef = useRef<ReactCodeMirrorRef>(null);
+
   const [CodeMirror, setCodeMirror] = useState<typeof CodeMirrorType | null>(
     null,
   );
@@ -326,6 +329,11 @@ export function BodyEditor({ body, onChange, collectionId }: BodyEditorProps) {
     ];
   }, [bodyType, availableVars, formatBody]);
 
+  const handleBeautify = useCallback(() => {
+    const view = cmRef.current?.view;
+    if (view) formatBody(view);
+  }, [formatBody]);
+
   const handleChange = useCallback(
     (value: string) => {
       onChange({ type: bodyType, content: value });
@@ -349,11 +357,25 @@ export function BodyEditor({ body, onChange, collectionId }: BodyEditorProps) {
             <span className="text-text-secondary capitalize">{type}</span>
           </label>
         ))}
+        {(bodyType === "json" || bodyType === "xml") && (
+          <div className="relative group ml-auto">
+            <button
+              onClick={handleBeautify}
+              className="text-xs text-text-muted hover:text-accent transition-colors"
+            >
+              Beautify
+            </button>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2 py-1 text-xs text-text-primary bg-bg-tertiary border border-border rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+              {typeof navigator !== "undefined" && navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"}+B
+            </div>
+          </div>
+        )}
       </div>
 
       {bodyType !== "none" &&
         (CodeMirror ? (
           <CodeMirror
+            ref={cmRef}
             value={body?.content || ""}
             onChange={handleChange}
             height="256px"
