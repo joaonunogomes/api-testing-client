@@ -249,6 +249,7 @@ interface BodyEditorProps {
 export function BodyEditor({ body, onChange, collectionId }: BodyEditorProps) {
   const bodyType = body?.type || "none";
   const availableVars = useAvailableVars(collectionId);
+  const appTheme = useAppStore((s) => s.theme);
 
   const cmRef = useRef<ReactCodeMirrorRef>(null);
 
@@ -379,7 +380,7 @@ export function BodyEditor({ body, onChange, collectionId }: BodyEditorProps) {
             value={body?.content || ""}
             onChange={handleChange}
             height="256px"
-            theme={oneDark}
+            theme={appTheme === "dark" ? oneDark : "light"}
             extensions={extensions}
             placeholder={
               bodyType === "json"

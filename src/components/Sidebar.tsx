@@ -4,13 +4,47 @@ import { useAppStore } from "@/stores/app-store";
 import { CollectionTree } from "./CollectionTree";
 import { EnvironmentSelector } from "./EnvironmentSelector";
 import { ImportDialog } from "./ImportDialog";
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 export function Sidebar() {
-  const { collections, sidebarWidth, fetchCollections } = useAppStore();
+  const { collections, sidebarWidth, setSidebarWidth, fetchCollections } =
+    useAppStore();
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      startX.current = e.clientX;
+      startWidth.current = sidebarWidth;
+      setIsResizing(true);
+    },
+    [sidebarWidth]
+  );
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = startWidth.current + (e.clientX - startX.current);
+      setSidebarWidth(Math.min(500, Math.max(200, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, setSidebarWidth]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -84,6 +118,15 @@ export function Sidebar() {
           )}
         </div>
       </aside>
+
+      <div
+        onMouseDown={handleMouseDown}
+        className={`w-1 cursor-col-resize border-r border-border hover:bg-accent/20 transition-colors ${isResizing ? "bg-accent/30" : ""}`}
+      />
+
+      {isResizing && (
+        <div className="fixed inset-0 z-50 cursor-col-resize" />
+      )}
 
       <ImportDialog open={showImport} onClose={() => setShowImport(false)} />
     </>

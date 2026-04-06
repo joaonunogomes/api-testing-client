@@ -35,6 +35,7 @@ export function RequestEditor() {
     collections,
     updateTabRequest,
     executeTab,
+    cancelTab,
     saveTab,
   } = useAppStore();
 
@@ -170,13 +171,21 @@ export function RequestEditor() {
           }}
         />
 
-        <button
-          onClick={handleSend}
-          disabled={tab.isExecuting}
-          className="bg-accent text-bg-primary px-5 py-2 rounded text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-        >
-          {tab.isExecuting ? "Sending..." : "Send"}
-        </button>
+        {tab.isExecuting ? (
+          <button
+            onClick={() => cancelTab(tab.id)}
+            className="bg-error text-white px-5 py-2 rounded text-sm font-semibold hover:bg-error/80 transition-colors whitespace-nowrap"
+          >
+            Cancel
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            className="bg-accent text-bg-primary px-5 py-2 rounded text-sm font-semibold hover:bg-accent-hover transition-colors whitespace-nowrap"
+          >
+            Send
+          </button>
+        )}
 
         <button
           onClick={handleSave}

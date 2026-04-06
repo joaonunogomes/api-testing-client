@@ -31,7 +31,7 @@ function formatSize(bytes: number): string {
 }
 
 export function ResponseViewer() {
-  const { openTabs, activeTabId, updateTabRequest } = useAppStore();
+  const { openTabs, activeTabId, updateTabRequest, theme: appTheme } = useAppStore();
   const [activeTab, setActiveTab] = useState<ResponseTab>("body");
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [savedMock, setSavedMock] = useState(false);
@@ -194,7 +194,7 @@ export function ResponseViewer() {
             <CodeMirror
               value={formattedBody}
               readOnly
-              theme={cmExtensions.oneDark as import("@codemirror/state").Extension}
+              theme={appTheme === "dark" ? cmExtensions.oneDark as import("@codemirror/state").Extension : "light"}
               extensions={[
                 isJson
                   ? (cmExtensions.json as () => import("@codemirror/state").Extension)()

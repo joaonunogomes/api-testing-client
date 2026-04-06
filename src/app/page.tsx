@@ -25,7 +25,14 @@ export default function Home() {
   const activeTab = openTabs.find((t) => t.id === activeTabId);
   const isCollectionSettings = activeTab?.type === "collection-settings";
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"shortcuts" | "scripting">("shortcuts");
+  const [settingsTab, setSettingsTab] = useState<"shortcuts" | "scripting" | "settings">("shortcuts");
+
+  const { theme, setTheme } = useAppStore();
+
+  // Apply theme on mount
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   const isMac = typeof navigator !== "undefined" && navigator.platform?.includes("Mac");
   const mod = isMac ? "⌘" : "Ctrl";
@@ -246,7 +253,7 @@ export default function Home() {
 
             {/* Tabs */}
             <div className="flex border-b border-border shrink-0">
-              {(["shortcuts", "scripting"] as const).map((tab) => (
+              {(["shortcuts", "scripting", "settings"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setSettingsTab(tab)}
@@ -256,7 +263,7 @@ export default function Home() {
                       : "text-text-muted hover:text-text-secondary"
                   }`}
                 >
-                  {tab === "shortcuts" ? "Keyboard Shortcuts" : "Scripting API"}
+                  {tab === "shortcuts" ? "Keyboard Shortcuts" : tab === "scripting" ? "Scripting API" : "Settings"}
                   {settingsTab === tab && (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />
                   )}
@@ -282,6 +289,41 @@ export default function Home() {
                       </kbd>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {settingsTab === "settings" && (
+                <div className="space-y-5 text-sm">
+                  <section>
+                    <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">Theme</h4>
+                    <div className="flex gap-3">
+                      {(["dark", "light"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setTheme(t)}
+                          className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
+                            theme === t
+                              ? "border-accent bg-accent/10"
+                              : "border-border hover:border-border-light"
+                          }`}
+                        >
+                          <div
+                            className={`w-16 h-10 rounded border ${
+                              t === "dark"
+                                ? "bg-[#1e1e2e] border-[#313244]"
+                                : "bg-[#eff1f5] border-[#ccd0da]"
+                            }`}
+                          >
+                            <div className={`m-1.5 h-1.5 w-8 rounded-sm ${t === "dark" ? "bg-[#45475a]" : "bg-[#bcc0cc]"}`} />
+                            <div className={`mx-1.5 h-1.5 w-5 rounded-sm ${t === "dark" ? "bg-[#89b4fa]" : "bg-[#1e66f5]"}`} />
+                          </div>
+                          <span className={`text-xs capitalize ${theme === t ? "text-accent" : "text-text-secondary"}`}>
+                            {t}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               )}
 

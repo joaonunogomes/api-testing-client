@@ -25,6 +25,32 @@
   --color-method-head: #74c7ec;
 }
 
+/* Light theme overrides */
+:root[data-theme="light"] {
+  --color-bg-primary: #eff1f5;
+  --color-bg-secondary: #e6e9ef;
+  --color-bg-tertiary: #dce0e8;
+  --color-bg-hover: #ccd0da;
+  --color-bg-active: #bcc0cc;
+  --color-border: #ccd0da;
+  --color-border-light: #bcc0cc;
+  --color-text-primary: #4c4f69;
+  --color-text-secondary: #5c5f77;
+  --color-text-muted: #8c8fa1;
+  --color-accent: #1e66f5;
+  --color-accent-hover: #209fb5;
+  --color-success: #40a02b;
+  --color-warning: #df8e1d;
+  --color-error: #d20f39;
+  --color-method-get: #40a02b;
+  --color-method-post: #df8e1d;
+  --color-method-put: #1e66f5;
+  --color-method-patch: #8839ef;
+  --color-method-delete: #d20f39;
+  --color-method-options: #179299;
+  --color-method-head: #209fb5;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -145,5 +171,15 @@ input, textarea, select {
 
 .cm-searchMatch-selected {
   background-color: rgba(137, 180, 250, 0.45) !important;
+  outline: 1px solid var(--color-accent);
+}
+
+:root[data-theme="light"] .cm-searchMatch {
+  background-color: rgba(30, 102, 245, 0.15) !important;
+  outline: 1px solid rgba(30, 102, 245, 0.3);
+}
+
+:root[data-theme="light"] .cm-searchMatch-selected {
+  background-color: rgba(30, 102, 245, 0.3) !important;
   outline: 1px solid var(--color-accent);
 }

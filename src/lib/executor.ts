@@ -284,6 +284,10 @@ export async function executeRequest(
   if (auth) {
     if (auth.type === "oauth2" && oauth2Token) {
       headers["Authorization"] = `Bearer ${oauth2Token}`;
+      if (auth.tokenVariable) {
+        const varName = auth.tokenVariable.replace(/^\{\{|\}\}$/g, "");
+        runtimeVars[varName] = oauth2Token;
+      }
     } else {
       applyAuth(auth, headers, url, updatedContexts);
     }

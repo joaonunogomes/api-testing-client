@@ -44,6 +44,7 @@ interface AppState {
   sessionEnvOverrides: Record<string, string>;
 
   // UI state
+  theme: "dark" | "light";
   sidebarWidth: number;
   expandedNodes: Set<string>;
 
@@ -52,8 +53,10 @@ interface AppState {
   setEnvironments: (environments: Environment[]) => void;
   setSelectedEnvironmentId: (id: string | null) => void;
   toggleNode: (nodeId: string) => void;
+  setTheme: (theme: "dark" | "light") => void;
   setSidebarWidth: (width: number) => void;
   setOAuth2Token: (tokenKey: string, token: OAuth2TokenState) => void;
+  setRuntimeVar: (name: string, value: string) => void;
   setMockServers: (servers: MockServerStatus[]) => void;
   fetchMockServers: () => Promise<void>;
 
@@ -67,6 +70,7 @@ interface AppState {
   setTabResponse: (tabId: string, response: ExecuteResponse | null) => void;
   setTabExecuting: (tabId: string, isExecuting: boolean) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
+  cancelTab: (tabId: string) => void;
 
   // Fetch actions
   fetchCollections: () => Promise<void>;
@@ -89,6 +93,7 @@ interface PersistedSession {
   activeTabId: string | null;
   tabs: { id: string; type?: string; collectionId: string; requestId: string }[];
   expandedNodes: string[];
+  theme?: "dark" | "light";
 }
 
 const isClient = typeof window !== "undefined";
@@ -109,6 +114,7 @@ function saveSession(state: AppState) {
           requestId: t.requestId,
         })),
       expandedNodes: [...state.expandedNodes],
+      theme: state.theme,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   } catch {
@@ -129,6 +135,9 @@ function loadSession(): PersistedSession | null {
 
 const savedSession = loadSession();
 
+// Abort controllers for in-flight requests (not stored in Zustand — not serializable)
+const abortControllers = new Map<string, AbortController>();
+
 export const useAppStore = create<AppState>((set, get) => ({
   collections: [],
   openTabs: [],
@@ -139,6 +148,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   mockServers: [],
   sessionRuntimeVars: {},
   sessionEnvOverrides: {},
+  theme: savedSession?.theme ?? "dark",
   sidebarWidth: 280,
   expandedNodes: new Set(savedSession?.expandedNodes ?? []),
 
@@ -157,6 +167,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { expandedNodes: expanded };
     }),
 
+  setTheme: (theme) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    set({ theme });
+  },
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
   setOAuth2Token: (tokenKey, token) =>
@@ -165,6 +179,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       tokens.set(tokenKey, token);
       return { oauth2Tokens: tokens };
     }),
+
+  setRuntimeVar: (name, value) =>
+    set((s) => ({ sessionRuntimeVars: { ...s.sessionRuntimeVars, [name]: value } })),
 
   setMockServers: (servers) => set({ mockServers: servers }),
 
@@ -342,6 +359,32 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { openTabs: tabs };
     }),
 
+  cancelTab: (tabId) => {
+    const controller = abortControllers.get(tabId);
+    if (controller) {
+      controller.abort();
+      abortControllers.delete(tabId);
+    }
+    set((s) => ({
+      openTabs: s.openTabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              isExecuting: false,
+              response: {
+                status: 0,
+                statusText: "Cancelled",
+                headers: {},
+                body: "Request cancelled by user",
+                time: 0,
+                size: 0,
+              },
+            }
+          : t,
+      ),
+    }));
+  },
+
   // --- Fetch ---
 
   fetchCollections: async () => {
@@ -387,6 +430,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().saveTab(tabId);
     }
 
+    const controller = new AbortController();
+    abortControllers.set(tabId, controller);
+
     set((s) => ({
       openTabs: s.openTabs.map((t) =>
         t.id === tabId ? { ...t, isExecuting: true, response: null } : t,
@@ -407,6 +453,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             runtimeVars: state.sessionRuntimeVars,
             envOverrides: state.sessionEnvOverrides,
           }),
+          signal: controller.signal,
         });
         response = await res.json();
       } else {
@@ -438,9 +485,12 @@ export const useAppStore = create<AppState>((set, get) => ({
             runtimeVars: state.sessionRuntimeVars,
             envOverrides: state.sessionEnvOverrides,
           }),
+          signal: controller.signal,
         });
         response = await res.json();
       }
+
+      abortControllers.delete(tabId);
 
       // Accumulate session-scoped variables set by scripts
       set((s) => ({
@@ -451,6 +501,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         sessionEnvOverrides: { ...s.sessionEnvOverrides, ...response?.envOverrides },
       }));
     } catch (e) {
+      abortControllers.delete(tabId);
+      if (e instanceof DOMException && e.name === "AbortError") return;
       set((s) => ({
         openTabs: s.openTabs.map((t) =>
           t.id === tabId
@@ -507,7 +559,8 @@ useAppStore.subscribe((state, prevState) => {
     state.openTabs !== prevState.openTabs ||
     state.activeTabId !== prevState.activeTabId ||
     state.selectedEnvironmentId !== prevState.selectedEnvironmentId ||
-    state.expandedNodes !== prevState.expandedNodes
+    state.expandedNodes !== prevState.expandedNodes ||
+    state.theme !== prevState.theme
   ) {
     saveSession(state);
   }

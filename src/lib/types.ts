@@ -43,6 +43,8 @@ export interface AuthOAuth2 {
   resource?: string;
   // Redirect mode: "app" uses in-app popup, "browser" opens system browser (useful for SSO)
   redirectMode?: "app" | "browser";
+  // Variable name where the acquired token is stored (e.g. "JWT_TOKEN" or "{{JWT_TOKEN}}")
+  tokenVariable?: string;
 }
 
 export type AuthConfig =

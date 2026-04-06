@@ -211,6 +211,7 @@ function OAuth2Editor({
     selectedEnvironmentId,
     environments,
     setOAuth2Token,
+    setRuntimeVar,
     oauth2Tokens,
   } = useAppStore();
   const [isLoading, setIsLoading] = useState(false);
@@ -247,6 +248,10 @@ function OAuth2Editor({
           : undefined,
         acquiredAt: Date.now(),
       });
+      if (auth.tokenVariable) {
+        const varName = auth.tokenVariable.replace(/^\{\{|\}\}$/g, "");
+        setRuntimeVar(varName, data.access_token as string);
+      }
       setTokenError(null);
     } else {
       setTokenError(
@@ -674,6 +679,19 @@ function OAuth2Editor({
             collectionId={selectedCollectionId}
           />
         </div>
+      </div>
+
+      {/* Save token to variable */}
+      <div className="border-t border-border pt-2.5 mt-1">
+        <Field
+          label="Save Token to Variable"
+          value={auth.tokenVariable || ""}
+          onChange={(v) => update({ tokenVariable: v || undefined })}
+          placeholder="e.g. {{JWT_TOKEN}}"
+          mono
+          hint="Optional. The acquired token will be stored in this variable so requests can reference it via {{variable}}. You can also pre-set this variable in an environment to skip the OAuth2 flow entirely (useful for local dev with mock IdPs)."
+          collectionId={selectedCollectionId}
+        />
       </div>
 
       {/* Token actions */}

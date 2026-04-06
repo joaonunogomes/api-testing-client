@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { useAppStore } from "@/stores/app-store";
 import {
   autocompletion,
   type CompletionContext,
@@ -273,6 +274,7 @@ export function ScriptCodeEditor({
   height = "128px",
   isPostResponse = false,
 }: ScriptCodeEditorProps) {
+  const appTheme = useAppStore((s) => s.theme);
   const [CodeMirror, setCodeMirror] = useState<typeof CodeMirrorType | null>(null);
 
   useEffect(() => {
@@ -307,7 +309,7 @@ export function ScriptCodeEditor({
       value={value}
       onChange={onChange}
       height={height}
-      theme={oneDark}
+      theme={appTheme === "dark" ? oneDark : "light"}
       extensions={extensions}
       placeholder={placeholder}
       basicSetup={{
