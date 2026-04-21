@@ -79,6 +79,14 @@ export default function Home() {
         e.preventDefault();
         saveActiveTab();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        const state = useAppStore.getState();
+        const tab = state.openTabs.find((t) => t.id === state.activeTabId);
+        if (tab && tab.type !== "collection-settings" && !tab.isExecuting) {
+          state.executeTab(tab.id);
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
 
