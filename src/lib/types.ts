@@ -223,3 +223,14 @@ export interface MockServerLogEntry {
   mockName?: string;
   status: number;
 }
+
+export interface HistoryEntry {
+  id: string;
+  timestamp: number;
+  method: string;
+  url: string;
+  status: number;
+  statusText: string;
+  time: number;
+  request: RequestFile;
+}

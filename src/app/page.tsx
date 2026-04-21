@@ -9,7 +9,7 @@ import { ResponseViewer } from "@/components/ResponseViewer";
 import { CollectionSettings } from "@/components/CollectionSettings";
 
 export default function Home() {
-  const { fetchCollections, fetchEnvironments, fetchMockServers } = useAppStore();
+  const { fetchCollections, fetchEnvironments, fetchMockServers, fetchHistory } = useAppStore();
   const [responseHeight, setResponseHeight] = useState(300);
   const [isDragging, setIsDragging] = useState(false);
   const [electronPlatform, setElectronPlatform] = useState<string | null>(null);
@@ -91,7 +91,7 @@ export default function Home() {
 
   useEffect(() => {
     const init = async () => {
-      await Promise.all([fetchCollections(), fetchEnvironments(), fetchMockServers()]);
+      await Promise.all([fetchCollections(), fetchEnvironments(), fetchMockServers(), fetchHistory()]);
       // Restore tabs and environment after data is loaded
       await useAppStore.getState().restoreSession();
     };
@@ -111,7 +111,7 @@ export default function Home() {
       eventSource.close();
       clearInterval(mockInterval);
     };
-  }, [fetchCollections, fetchEnvironments, fetchMockServers]);
+  }, [fetchCollections, fetchEnvironments, fetchMockServers, fetchHistory]);
 
   // Handle vertical resize
   useEffect(() => {

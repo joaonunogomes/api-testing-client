@@ -17,7 +17,7 @@ interface ImportDialogProps {
   onClose: () => void;
 }
 
-type Tab = "postman" | "repo";
+type Tab = "postman" | "openapi" | "repo";
 
 function PostmanImport({
   onDone,
@@ -174,6 +174,177 @@ function PostmanImport({
   );
 }
 
+function OpenApiImport({ onDone }: { onDone: () => void }) {
+  const { fetchCollections } = useAppStore();
+  const [isDragging, setIsDragging] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [specUrl, setSpecUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      setIsImporting(true);
+      setError(null);
+      setResult(null);
+
+      try {
+        const text = await file.text();
+        const res = await fetch("/api/import/openapi", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: text,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Import failed");
+          setIsImporting(false);
+          return;
+        }
+
+        setResult(data);
+        fetchCollections();
+        onDone();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Import failed");
+      } finally {
+        setIsImporting(false);
+      }
+    },
+    [fetchCollections, onDone],
+  );
+
+  const handleImportUrl = useCallback(async () => {
+    if (!specUrl.trim()) return;
+    setIsImporting(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/import/openapi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: specUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Import failed");
+        setIsImporting(false);
+        return;
+      }
+
+      setResult(data);
+      fetchCollections();
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setIsImporting(false);
+    }
+  }, [fetchCollections, onDone, specUrl]);
+
+  return (
+    <div className="space-y-4">
+      <div
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          const file = e.dataTransfer.files[0];
+          if (file) handleImportFile(file);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onClick={() => fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+          isDragging
+            ? "border-accent bg-accent/10"
+            : "border-border hover:border-border-light"
+        }`}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,.yaml,.yml"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImportFile(file);
+          }}
+          className="hidden"
+        />
+        {isImporting ? (
+          <div className="flex items-center justify-center gap-2 text-text-secondary">
+            <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <span>Importing...</span>
+          </div>
+        ) : (
+          <>
+            <p className="text-text-secondary text-sm">
+              Drop an OpenAPI / Swagger spec here, or click to browse
+            </p>
+            <p className="text-text-muted text-xs mt-2">
+              Supports OpenAPI 3.x and Swagger 2.0 (JSON or YAML)
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={specUrl}
+          onChange={(e) => setSpecUrl(e.target.value)}
+          placeholder="Or paste a spec URL..."
+          className="flex-1 bg-bg-primary border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent font-mono"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleImportUrl();
+          }}
+        />
+        <button
+          onClick={handleImportUrl}
+          disabled={!specUrl.trim() || isImporting}
+          className="bg-accent text-bg-primary px-3 py-1.5 rounded text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+        >
+          Fetch
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-error/10 border border-error/30 rounded p-3 text-sm text-error">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="bg-success/10 border border-success/30 rounded p-3 text-sm space-y-2">
+          <p className="text-success font-medium">
+            Collection &quot;{result.name}&quot; imported with{" "}
+            {result.requestCount} requests
+          </p>
+          {result.warnings.length > 0 && (
+            <div className="mt-2">
+              <p className="text-warning text-xs font-medium mb-1">
+                Warnings ({result.warnings.length}):
+              </p>
+              <ul className="text-xs text-text-muted space-y-0.5 max-h-32 overflow-y-auto">
+                {result.warnings.map((w, i) => (
+                  <li key={i} className="flex gap-1">
+                    <span className="text-warning flex-shrink-0">-</span>
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RepoImport({ onDone }: { onDone: () => void }) {
   const { fetchCollections } = useAppStore();
   const [folderPath, setFolderPath] = useState("");
@@ -281,6 +452,7 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "postman", label: "From Postman" },
+    { id: "openapi", label: "From OpenAPI" },
     { id: "repo", label: "From Local Repo" },
   ];
 
@@ -324,6 +496,7 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
 
         <div className="p-5">
           {activeTab === "postman" && <PostmanImport onDone={() => {}} />}
+          {activeTab === "openapi" && <OpenApiImport onDone={() => {}} />}
           {activeTab === "repo" && <RepoImport onDone={() => {}} />}
         </div>
 

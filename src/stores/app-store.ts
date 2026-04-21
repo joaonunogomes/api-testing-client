@@ -3,6 +3,7 @@ import type {
   Collection,
   Environment,
   ExecuteResponse,
+  HistoryEntry,
   RequestFile,
   OAuth2TokenState,
   MockServerStatus,
@@ -39,6 +40,9 @@ interface AppState {
   // Mock servers
   mockServers: MockServerStatus[];
 
+  // History
+  history: HistoryEntry[];
+
   // Session-scoped variables (set by scripts via ac.env.set / ac.setVar)
   sessionRuntimeVars: Record<string, string>;
   sessionEnvOverrides: Record<string, string>;
@@ -71,6 +75,11 @@ interface AppState {
   setTabExecuting: (tabId: string, isExecuting: boolean) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   cancelTab: (tabId: string) => void;
+
+  // History actions
+  fetchHistory: () => Promise<void>;
+  clearHistory: () => Promise<void>;
+  openHistoryEntry: (entry: HistoryEntry) => void;
 
   // Fetch actions
   fetchCollections: () => Promise<void>;
@@ -146,6 +155,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedEnvironmentId: savedSession?.selectedEnvironmentId ?? null,
   oauth2Tokens: new Map(),
   mockServers: [],
+  history: [],
   sessionRuntimeVars: {},
   sessionEnvOverrides: {},
   theme: savedSession?.theme ?? "dark",
@@ -385,6 +395,44 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  // --- History ---
+
+  fetchHistory: async () => {
+    try {
+      const res = await fetch("/api/history");
+      const history = await res.json();
+      set({ history });
+    } catch {
+      // ignore
+    }
+  },
+
+  clearHistory: async () => {
+    await fetch("/api/history", { method: "DELETE" });
+    set({ history: [] });
+  },
+
+  openHistoryEntry: (entry: HistoryEntry) => {
+    const id = `__new__${Date.now()}`;
+    set((s) => ({
+      openTabs: [
+        ...s.openTabs,
+        {
+          id,
+          collectionId: "",
+          requestId: "",
+          label: entry.request.meta?.name || entry.url,
+          method: entry.method,
+          request: entry.request,
+          response: null,
+          isExecuting: false,
+          isDirty: false,
+        },
+      ],
+      activeTabId: id,
+    }));
+  },
+
   // --- Fetch ---
 
   fetchCollections: async () => {
@@ -500,6 +548,25 @@ export const useAppStore = create<AppState>((set, get) => ({
         sessionRuntimeVars: { ...s.sessionRuntimeVars, ...response?.runtimeVars },
         sessionEnvOverrides: { ...s.sessionEnvOverrides, ...response?.envOverrides },
       }));
+
+      // Record to history
+      if (tab.request && response?.status) {
+        const historyEntry = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          timestamp: Date.now(),
+          method: tab.request.request?.method || "GET",
+          url: tab.request.request?.url || "",
+          status: response.status,
+          statusText: response.statusText,
+          time: response.time,
+          request: tab.request,
+        };
+        fetch("/api/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(historyEntry),
+        }).then(() => get().fetchHistory()).catch(() => {});
+      }
     } catch (e) {
       abortControllers.delete(tabId);
       if (e instanceof DOMException && e.name === "AbortError") return;

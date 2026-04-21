@@ -3,12 +3,14 @@
 import { useAppStore } from "@/stores/app-store";
 import { CollectionTree } from "./CollectionTree";
 import { EnvironmentSelector } from "./EnvironmentSelector";
+import { HistoryList } from "./HistoryList";
 import { ImportDialog } from "./ImportDialog";
 import { useState, useCallback, useEffect, useRef } from "react";
 
 export function Sidebar() {
-  const { collections, sidebarWidth, setSidebarWidth, fetchCollections } =
+  const { collections, sidebarWidth, setSidebarWidth, fetchCollections, fetchHistory } =
     useAppStore();
+  const [sidebarTab, setSidebarTab] = useState<"collections" | "history">("collections");
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [showImport, setShowImport] = useState(false);
@@ -68,55 +70,84 @@ export function Sidebar() {
           <EnvironmentSelector />
         </div>
 
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-          <span className="text-xs font-semibold uppercase text-text-muted tracking-wider">
+        <div className="flex items-center border-b border-border">
+          <button
+            onClick={() => setSidebarTab("collections")}
+            className={`flex-1 text-xs font-semibold uppercase tracking-wider py-2 transition-colors relative ${
+              sidebarTab === "collections" ? "text-text-primary" : "text-text-muted hover:text-text-secondary"
+            }`}
+          >
             Collections
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowImport(true)}
-              className="text-text-muted hover:text-accent text-xs px-1.5 py-0.5 rounded hover:bg-bg-hover transition-colors"
-              title="Import from Postman or link a local repo"
-            >
-              Import
-            </button>
-            <button
-              onClick={() => setIsCreating(!isCreating)}
-              className="text-text-muted hover:text-text-primary text-lg leading-none px-1"
-              title="New collection"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {isCreating && (
-          <div className="p-2 border-b border-border">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreate();
-                if (e.key === "Escape") setIsCreating(false);
-              }}
-              placeholder="Collection name..."
-              autoFocus
-              className="w-full bg-bg-primary border border-border rounded px-2 py-1 text-sm text-text-primary outline-none focus:border-accent"
-            />
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto py-1">
-          {collections.map((collection) => (
-            <CollectionTree key={collection.id} collection={collection} />
-          ))}
-          {collections.length === 0 && (
-            <p className="text-text-muted text-xs px-3 py-4 text-center">
-              No collections found
-            </p>
+            {sidebarTab === "collections" && (
+              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent" />
+            )}
+          </button>
+          <button
+            onClick={() => { setSidebarTab("history"); fetchHistory(); }}
+            className={`flex-1 text-xs font-semibold uppercase tracking-wider py-2 transition-colors relative ${
+              sidebarTab === "history" ? "text-text-primary" : "text-text-muted hover:text-text-secondary"
+            }`}
+          >
+            History
+            {sidebarTab === "history" && (
+              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent" />
+            )}
+          </button>
+          {sidebarTab === "collections" && (
+            <div className="flex items-center gap-1 pr-2">
+              <button
+                onClick={() => setShowImport(true)}
+                className="text-text-muted hover:text-accent text-xs px-1.5 py-0.5 rounded hover:bg-bg-hover transition-colors"
+                title="Import from Postman or link a local repo"
+              >
+                Import
+              </button>
+              <button
+                onClick={() => setIsCreating(!isCreating)}
+                className="text-text-muted hover:text-text-primary text-lg leading-none px-1"
+                title="New collection"
+              >
+                +
+              </button>
+            </div>
           )}
         </div>
+
+        {sidebarTab === "collections" ? (
+          <>
+            {isCreating && (
+              <div className="p-2 border-b border-border">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreate();
+                    if (e.key === "Escape") setIsCreating(false);
+                  }}
+                  placeholder="Collection name..."
+                  autoFocus
+                  className="w-full bg-bg-primary border border-border rounded px-2 py-1 text-sm text-text-primary outline-none focus:border-accent"
+                />
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto py-1">
+              {collections.map((collection) => (
+                <CollectionTree key={collection.id} collection={collection} />
+              ))}
+              {collections.length === 0 && (
+                <p className="text-text-muted text-xs px-3 py-4 text-center">
+                  No collections found
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 overflow-hidden">
+            <HistoryList />
+          </div>
+        )}
       </aside>
 
       <div

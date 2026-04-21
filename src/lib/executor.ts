@@ -1,3 +1,4 @@
+import { Agent, fetch as undiciFetch } from "undici";
 import type {
   AuthConfig,
   Collection,
@@ -9,6 +10,11 @@ import type {
 } from "./types";
 import { normalizeKVPairs } from "./types";
 import { resolveVariables } from "./variables";
+
+// Disable TLS verification for outgoing test requests (same as Postman/Insomnia)
+const tlsAgent = new Agent({
+  connect: { rejectUnauthorized: false },
+});
 
 function buildVariableContexts(
   collection: Collection | null,
@@ -328,11 +334,12 @@ export async function executeRequest(
   const startTime = performance.now();
   let response: Response;
   try {
-    response = await fetch(url.toString(), {
+    response = await undiciFetch(url.toString(), {
       method: requestFile.request.method,
       headers,
       body: sendBody,
-    });
+      dispatcher: tlsAgent,
+    }) as unknown as Response;
   } catch (e: unknown) {
     return {
       status: 0,

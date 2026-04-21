@@ -15,6 +15,7 @@ Run it as a Docker container, use it in the browser, or install the desktop app 
 - **Built-in dynamic variables** — `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`, `{{$randomCompanyName}}`
 - **Pre-request & post-response scripts** — JavaScript scripts with test assertions via `bru.test()`
 - **Postman import** — Import Postman collections (v2.1) and environments, converted to native YAML
+- **OpenAPI import** — Import OpenAPI 3.x and Swagger 2.0 specs (JSON or YAML) from file or URL
 - **Live reload** — Edit YAML files in your editor and the UI updates instantly via Server-Sent Events
 - **Multi-tab interface** — Open multiple requests in tabs with drag-to-reorder
 - **Mock server** — Start a mock HTTP server from any collection. Each request with mocks becomes a route, serving defined responses on `localhost`
@@ -419,6 +420,21 @@ You can import Postman collections (v2.1 format) and environments directly from 
 2. Select a Postman collection or environment JSON file
 3. The collection and its requests are converted to YAML and saved to your workspace
 
+## Importing from OpenAPI / Swagger
+
+Import OpenAPI 3.x or Swagger 2.0 specs (JSON or YAML) to generate a collection with folders and requests.
+
+1. Click the **Import** button in the sidebar and select the **From OpenAPI** tab
+2. Drop a spec file (`.json`, `.yaml`, `.yml`) or paste a URL to a remote spec
+3. The importer resolves `$ref`s, extracts paths/operations, generates example request bodies from schemas, and creates a collection
+
+What gets imported:
+- **Base URL** from `servers[0].url` (OpenAPI 3.x) or `scheme://host/basePath` (Swagger 2.0)
+- **Auth** from top-level `security` and `securitySchemes` (bearer, basic, API key, OAuth2)
+- **Requests** grouped by first tag (or first path segment as fallback)
+- **Query params and headers** from operation parameters
+- **Request bodies** with example JSON generated from schemas
+
 ## API Reference
 
 The backend exposes a REST API that the frontend consumes. You can also use it programmatically.
@@ -439,6 +455,7 @@ The backend exposes a REST API that the frontend consumes. You can also use it p
 | `DELETE` | `/api/environments/:id` | Delete an environment |
 | `POST` | `/api/execute` | Execute a request |
 | `POST` | `/api/import` | Import a Postman collection or environment |
+| `POST` | `/api/import/openapi` | Import an OpenAPI/Swagger spec (file or URL) |
 | `POST` | `/api/oauth2/token` | OAuth 2.0 token exchange |
 | `GET` | `/api/oauth2/callback` | OAuth 2.0 callback handler |
 | `GET` | `/api/mock-server` | Get status of all running mock servers |

@@ -7,6 +7,7 @@ import type {
   CollectionFile,
   Environment,
   EnvironmentFile,
+  HistoryEntry,
   RequestFile,
   TreeNode,
 } from "./types";
@@ -640,6 +641,58 @@ export async function deleteEnvironment(id: string): Promise<void> {
     );
   } catch {
     // Ignore
+  }
+}
+
+// ---- History ----
+
+const HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function getHistoryDir(): string {
+  return path.join(getWorkspaceDir(), "history");
+}
+
+export async function addHistoryEntry(entry: HistoryEntry): Promise<void> {
+  await writeYaml(path.join(getHistoryDir(), `${entry.id}.yaml`), entry);
+}
+
+export async function listHistory(): Promise<HistoryEntry[]> {
+  const dir = getHistoryDir();
+  try {
+    await fs.access(dir);
+  } catch {
+    return [];
+  }
+
+  const cutoff = Date.now() - HISTORY_TTL_MS;
+  const entries: HistoryEntry[] = [];
+  const files = await fs.readdir(dir);
+
+  for (const file of files) {
+    if (!file.endsWith(".yaml")) continue;
+    try {
+      const entry = await readYaml<HistoryEntry>(path.join(dir, file));
+      if (entry.timestamp < cutoff) {
+        // Expired — delete
+        await fs.unlink(path.join(dir, file)).catch(() => {});
+      } else {
+        entries.push(entry);
+      }
+    } catch {
+      // Skip invalid files
+    }
+  }
+
+  entries.sort((a, b) => b.timestamp - a.timestamp);
+  return entries;
+}
+
+export async function clearHistory(): Promise<void> {
+  const dir = getHistoryDir();
+  try {
+    await fs.rm(dir, { recursive: true, force: true });
+  } catch {
+    // ignore
   }
 }
 
