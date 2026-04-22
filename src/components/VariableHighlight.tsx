@@ -346,6 +346,25 @@ export function VariableInput({
   // Track last value we set via innerHTML to avoid re-rendering on our own changes
   const lastValueRef = useRef(value);
 
+  // Track whether the last change was from user input (typing) vs external (prop change)
+  const isUserInputRef = useRef(false);
+
+  // Undo/redo stack
+  const undoStackRef = useRef<{ value: string; cursor: number }[]>([{ value, cursor: 0 }]);
+  const redoStackRef = useRef<{ value: string; cursor: number }[]>([]);
+  const isUndoRedoRef = useRef(false);
+
+  // Reset undo stack when value changes externally (e.g. tab switch)
+  const prevExternalValueRef = useRef(value);
+  if (!isUserInputRef.current && !isUndoRedoRef.current && value !== prevExternalValueRef.current) {
+    const stack = undoStackRef.current;
+    if (!stack.length || stack[stack.length - 1].value !== value) {
+      undoStackRef.current = [{ value, cursor: 0 }];
+      redoStackRef.current = [];
+    }
+  }
+  prevExternalValueRef.current = value;
+
   const handleMouseOver = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     const varName = target.getAttribute?.("data-var");
@@ -371,30 +390,54 @@ export function VariableInput({
     [value, availableVars],
   );
 
-  // Update innerHTML when value or highlighting changes, preserving cursor
+  // Track the last highlighted HTML we applied so we only re-render when highlighting changes
+  const lastHTMLRef = useRef("");
+  // Debounce timer for re-highlighting after user stops typing
+  const rehighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Update innerHTML — skip during active user typing to preserve native undo
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
 
     const currentText = getPlainText(el);
-    if (currentText === value && lastValueRef.current === value) {
-      // Text hasn't changed — still re-render highlights but preserve cursor
+
+    if (isUserInputRef.current && currentText === value) {
+      // User is actively typing — don't clobber innerHTML (preserves undo stack)
+      // Schedule a debounced re-highlight to update variable colors
+      if (rehighlightTimerRef.current) clearTimeout(rehighlightTimerRef.current);
+      rehighlightTimerRef.current = setTimeout(() => {
+        const el2 = editorRef.current;
+        if (!el2) return;
+        const offset = saveCursorOffset(el2);
+        el2.innerHTML = buildHighlightedHTML(getPlainText(el2), availableVars);
+        lastHTMLRef.current = el2.innerHTML;
+        restoreCursorOffset(el2, offset);
+      }, 300);
+      isUserInputRef.current = false;
+      return;
+    }
+
+    // External value change or highlight change — apply immediately
+    if (highlightedHTML !== lastHTMLRef.current || currentText !== value) {
       const offset = focused ? saveCursorOffset(el) : 0;
       el.innerHTML = highlightedHTML;
-      if (focused) {
-        restoreCursorOffset(el, offset);
-      }
-    } else {
-      // Value changed externally (e.g. autocomplete, paste-curl)
-      const offset = focused ? saveCursorOffset(el) : 0;
-      el.innerHTML = highlightedHTML;
+      lastHTMLRef.current = highlightedHTML;
       lastValueRef.current = value;
       if (focused) {
-        // For external changes, try to maintain cursor but clamp to new length
         restoreCursorOffset(el, Math.min(offset, value.length));
       }
     }
-  }, [highlightedHTML, value, focused]);
+
+    isUserInputRef.current = false;
+  }, [highlightedHTML, value, focused, availableVars]);
+
+  // Cleanup debounce timer
+  useEffect(() => {
+    return () => {
+      if (rehighlightTimerRef.current) clearTimeout(rehighlightTimerRef.current);
+    };
+  }, []);
 
   const filteredVars = useMemo(() => {
     if (!acState) return [];
@@ -443,9 +486,47 @@ export function VariableInput({
     [acState, value, onChange, availableVars],
   );
 
+  const applyUndoRedo = useCallback((entry: { value: string; cursor: number }) => {
+    isUndoRedoRef.current = true;
+    lastValueRef.current = entry.value;
+    onChange(entry.value);
+    const el = editorRef.current;
+    if (el) {
+      el.innerHTML = buildHighlightedHTML(entry.value, availableVars);
+      lastHTMLRef.current = el.innerHTML;
+      restoreCursorOffset(el, entry.cursor);
+    }
+  }, [onChange, availableVars]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    const mod = e.metaKey || e.ctrlKey;
+
+    // Undo: Ctrl/Cmd+Z
+    if (mod && e.key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      const stack = undoStackRef.current;
+      if (stack.length > 1) {
+        const current = stack.pop()!;
+        redoStackRef.current.push(current);
+        applyUndoRedo(stack[stack.length - 1]);
+      }
+      return;
+    }
+
+    // Redo: Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y
+    if (mod && ((e.key === "z" && e.shiftKey) || e.key === "y")) {
+      e.preventDefault();
+      const redo = redoStackRef.current;
+      if (redo.length > 0) {
+        const entry = redo.pop()!;
+        undoStackRef.current.push(entry);
+        applyUndoRedo(entry);
+      }
+      return;
+    }
+
     // Block Enter (no newlines in single-line input)
-    if (e.key === "Enter" && !e.metaKey && !e.ctrlKey && !(acState && filteredVars.length > 0)) {
+    if (e.key === "Enter" && !mod && !(acState && filteredVars.length > 0)) {
       e.preventDefault();
       return;
     }
@@ -478,10 +559,23 @@ export function VariableInput({
   const handleInput = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;
+    if (isUndoRedoRef.current) {
+      isUndoRedoRef.current = false;
+      return;
+    }
     const newVal = getPlainText(el);
-    lastValueRef.current = newVal;
-    onChange(newVal);
     const cursorPos = saveCursorOffset(el);
+    lastValueRef.current = newVal;
+    isUserInputRef.current = true;
+    // Push to undo stack (deduplicate consecutive identical values)
+    const stack = undoStackRef.current;
+    if (!stack.length || stack[stack.length - 1].value !== newVal) {
+      stack.push({ value: newVal, cursor: cursorPos });
+      // Cap stack size
+      if (stack.length > 200) stack.shift();
+    }
+    redoStackRef.current = [];
+    onChange(newVal);
     updateAutocomplete(newVal, cursorPos);
   }, [onChange, updateAutocomplete]);
 
