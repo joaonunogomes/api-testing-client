@@ -273,11 +273,19 @@ async function buildTree(
     if (entry.isDirectory()) {
       const children = await buildTree(fullPath, collectionId, relPath);
       if (children.length > 0) {
+        let folderSeq: number | undefined;
+        try {
+          const meta = await readYaml<{ seq?: number }>(path.join(fullPath, ".meta.yaml"));
+          folderSeq = meta.seq;
+        } catch {
+          // No meta file
+        }
         nodes.push({
           id: `${collectionId}/${relPath}`,
           name: entry.name,
           type: "folder",
           children,
+          seq: folderSeq,
         });
       }
     } else if (
@@ -385,6 +393,19 @@ export async function listCollections(): Promise<Collection[]> {
     const collectionDir = path.join(collectionsDir, entry.name);
     const col = await loadCollectionFromDir(collectionDir, entry.name);
     collections.push(col);
+  }
+
+  // Sort by saved order
+  const order = await getCollectionOrder();
+  if (order.length > 0) {
+    collections.sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
   }
 
   return collections;
@@ -694,6 +715,136 @@ export async function clearHistory(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+// ---- Reordering ----
+
+interface FolderMeta {
+  seq?: number;
+}
+
+/**
+ * Reorder children of a parent node within a collection.
+ * parentPath is "" for root-level items, or "folder/subfolder" for nested.
+ * orderedIds is the list of child node basenames in the desired order.
+ */
+export async function reorderItems(
+  collectionId: string,
+  parentPath: string,
+  orderedIds: string[],
+): Promise<void> {
+  const dir = await resolveCollectionDir(collectionId);
+  if (!dir) return;
+
+  const parentDir = parentPath ? path.join(dir, parentPath) : dir;
+
+  for (let i = 0; i < orderedIds.length; i++) {
+    const childName = orderedIds[i];
+    const seq = i + 1;
+    const yamlPath = path.join(parentDir, `${childName}.yaml`);
+    const folderPath = path.join(parentDir, childName);
+
+    // Check if it's a request file
+    try {
+      await fs.access(yamlPath);
+      const req = await readYaml<RequestFile>(yamlPath);
+      if (!req.meta) req.meta = { name: childName };
+      req.meta.seq = seq;
+      // Write back preserving the same format
+      const toSave = {
+        ...req,
+        request: req.request
+          ? {
+              ...req.request,
+              params: req.request.params
+                ? kvPairsToRecord(normalizeKVPairs(req.request.params))
+                : undefined,
+              headers: req.request.headers
+                ? kvPairsToRecord(normalizeKVPairs(req.request.headers))
+                : undefined,
+            }
+          : req.request,
+      };
+      if (toSave.request?.params && Object.keys(toSave.request.params).length === 0)
+        delete (toSave.request as Record<string, unknown>).params;
+      if (toSave.request?.headers && Object.keys(toSave.request.headers).length === 0)
+        delete (toSave.request as Record<string, unknown>).headers;
+      await writeYaml(yamlPath, toSave);
+      continue;
+    } catch {
+      // Not a request file
+    }
+
+    // Check if it's a folder
+    try {
+      const stat = await fs.stat(folderPath);
+      if (stat.isDirectory()) {
+        const metaPath = path.join(folderPath, ".meta.yaml");
+        await writeYaml(metaPath, { seq } as FolderMeta);
+      }
+    } catch {
+      // Skip unknown items
+    }
+  }
+}
+
+/**
+ * Move a request or folder to a different parent within the same collection.
+ */
+export async function moveItem(
+  collectionId: string,
+  sourcePath: string,
+  destParentPath: string,
+): Promise<void> {
+  const dir = await resolveCollectionDir(collectionId);
+  if (!dir) return;
+
+  const srcFull = path.join(dir, sourcePath);
+  const itemName = path.basename(sourcePath);
+
+  // Check if source is a request file
+  const srcYaml = srcFull + ".yaml";
+  try {
+    await fs.access(srcYaml);
+    const destDir = destParentPath ? path.join(dir, destParentPath) : dir;
+    await fs.mkdir(destDir, { recursive: true });
+    await fs.rename(srcYaml, path.join(destDir, itemName + ".yaml"));
+    return;
+  } catch {
+    // Not a yaml file
+  }
+
+  // Check if source is a folder
+  try {
+    const stat = await fs.stat(srcFull);
+    if (stat.isDirectory()) {
+      const destDir = destParentPath ? path.join(dir, destParentPath) : dir;
+      await fs.mkdir(destDir, { recursive: true });
+      await fs.rename(srcFull, path.join(destDir, itemName));
+    }
+  } catch {
+    // Skip
+  }
+}
+
+/** Read/write collection order in the workspace */
+async function getOrderFile(): Promise<{ collections?: string[] }> {
+  const filePath = path.join(getWorkspaceDir(), "order.yaml");
+  try {
+    return await readYaml<{ collections?: string[] }>(filePath);
+  } catch {
+    return {};
+  }
+}
+
+export async function getCollectionOrder(): Promise<string[]> {
+  const order = await getOrderFile();
+  return order.collections || [];
+}
+
+export async function saveCollectionOrder(orderedIds: string[]): Promise<void> {
+  const filePath = path.join(getWorkspaceDir(), "order.yaml");
+  await writeYaml(filePath, { collections: orderedIds });
 }
 
 export { getWorkspaceDir };

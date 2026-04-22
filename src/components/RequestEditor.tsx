@@ -72,6 +72,8 @@ export function RequestEditor() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const tab = openTabs.find((t) => t.id === activeTabId);
+  const localRequest = tab?.request ?? null;
+  const tabId = tab?.id ?? "";
 
   // Open an example tab when nothing is open
   useEffect(() => {
@@ -104,11 +106,42 @@ export function RequestEditor() {
     }
   }, [openTabs.length]);
 
-  if (!tab || !tab.request) {
+  // On first load, if the stored URL contains query params, extract them into params list
+  const requestUrl = localRequest?.request.url ?? "";
+  const requestParams = localRequest?.request.params;
+  useEffect(() => {
+    if (!localRequest) return;
+    const [base, qs] = splitUrlAtQuery(requestUrl);
+    if (qs) {
+      const urlParams = parseQueryString(qs);
+      const existing = normalizeKVPairs(requestParams);
+      const updated = {
+        ...localRequest,
+        request: { ...localRequest.request, url: base, params: [...existing, ...urlParams] },
+      };
+      updateTabRequest(tabId, updated);
+    }
+    // Only run on mount (or when tab changes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabId]);
+
+  // Local state for URL bar — only syncs to params on blur
+  const [urlBarValue, setUrlBarValue] = useState<string | null>(null);
+  const isUrlFocused = urlBarValue !== null;
+
+  const paramPairs = useMemo(() => normalizeKVPairs(localRequest?.request.params), [localRequest?.request.params]);
+
+  // Compute the full display URL = base + query string from enabled params
+  const displayUrl = useMemo(() => {
+    const base = splitUrlAtQuery(requestUrl)[0];
+    const qs = buildQueryString(paramPairs);
+    return qs ? `${base}?${qs}` : base;
+  }, [requestUrl, paramPairs]);
+
+  if (!tab || !localRequest) {
     return null;
   }
 
-  const localRequest = tab.request;
   const collection = collections.find((c) => c.id === tab.collectionId);
 
   const updateRequest = (updates: Partial<RequestFile>) => {
@@ -160,39 +193,27 @@ export function RequestEditor() {
   };
   const handleSend = () => executeTab(tab.id);
 
-  const paramPairs = normalizeKVPairs(localRequest.request.params);
   const headerPairs = normalizeKVPairs(localRequest.request.headers);
 
-  // --- Bidirectional URL <-> Params sync ---
+  // When URL bar gains focus, initialize local state with the display URL
+  const handleUrlFocus = () => {
+    setUrlBarValue(displayUrl);
+  };
 
-  // Ensure base URL has no query string (one-time migration for existing requests)
-  const baseUrl = useMemo(() => splitUrlAtQuery(localRequest.request.url)[0], [localRequest.request.url]);
-
-  // On first load, if the stored URL contains query params, extract them into params list
-  useEffect(() => {
-    const [base, qs] = splitUrlAtQuery(localRequest.request.url);
-    if (qs) {
+  // When URL bar loses focus, sync typed URL to params
+  const handleUrlBlur = () => {
+    if (urlBarValue !== null) {
+      const [newBase, qs] = splitUrlAtQuery(urlBarValue);
       const urlParams = parseQueryString(qs);
-      const existing = normalizeKVPairs(localRequest.request.params);
-      updateRequestDef({ url: base, params: [...existing, ...urlParams] });
+      const disabledParams = paramPairs.filter((p) => p.enabled === false);
+      updateRequestDef({ url: newBase, params: [...urlParams, ...disabledParams] });
+      setUrlBarValue(null);
     }
-    // Only run on mount (or when tab changes)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab.id]);
+  };
 
-  // Compute the full display URL = base + query string from enabled params
-  const displayUrl = useMemo(() => {
-    const qs = buildQueryString(paramPairs);
-    return qs ? `${baseUrl}?${qs}` : baseUrl;
-  }, [baseUrl, paramPairs]);
-
-  // When user edits the URL bar, parse query params and sync to params list
+  // While focused, just update local state (no sync on every keystroke)
   const handleUrlChange = (newUrl: string) => {
-    const [newBase, qs] = splitUrlAtQuery(newUrl);
-    const urlParams = parseQueryString(qs);
-    // Keep disabled params from existing list
-    const disabledParams = paramPairs.filter((p) => p.enabled === false);
-    updateRequestDef({ url: newBase, params: [...urlParams, ...disabledParams] });
+    setUrlBarValue(newUrl);
   };
 
   // When user edits the params list, just update params (displayUrl auto-updates)
@@ -223,15 +244,18 @@ export function RequestEditor() {
         />
 
         <VariableInput
-          value={displayUrl}
+          value={isUrlFocused ? urlBarValue : displayUrl}
           onChange={handleUrlChange}
           placeholder="https://api.example.com/endpoint"
           collectionId={tab.collectionId}
           wrapperClassName="flex-1"
           className="bg-bg-secondary border border-border rounded px-3 py-2 text-sm text-text-primary outline-none focus:border-accent font-mono"
           onPaste={handlePasteCurl}
+          onFocus={handleUrlFocus}
+          onBlur={handleUrlBlur}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              handleUrlBlur();
               handleSend();
             }
           }}

@@ -83,10 +83,10 @@ function VarToken({
         ref={ref}
         onMouseEnter={handleEnter}
         onMouseLeave={() => setHovered(false)}
-        className={`cursor-default ${
+        className={`${
           part.resolved
-            ? "text-success font-semibold"
-            : "text-warning font-semibold"
+            ? "text-success"
+            : "text-warning"
         }`}
       >
         {part.text}
@@ -167,10 +167,6 @@ export function VariableText({
 }
 
 /**
- * An input that shows a highlighted overlay for {{variables}}.
- * The actual editing happens in a regular input underneath.
- */
-/**
  * Extract the variable prefix being typed at the cursor position.
  * Returns { start, prefix } if the cursor is inside `{{prefix` (no closing `}}`), null otherwise.
  */
@@ -179,11 +175,9 @@ function getVarPrefixAtCursor(
   cursorPos: number,
 ): { start: number; prefix: string } | null {
   const before = value.slice(0, cursorPos);
-  // Find the last `{{` before the cursor that isn't already closed
   const openIdx = before.lastIndexOf("{{");
   if (openIdx === -1) return null;
   const afterOpen = before.slice(openIdx + 2);
-  // If there's a `}}` between the `{{` and cursor, it's already closed
   if (afterOpen.includes("}}")) return null;
   return { start: openIdx, prefix: afterOpen.trim() };
 }
@@ -197,7 +191,7 @@ function AutocompleteDropdown({
   items: { name: string; value: string }[];
   selectedIndex: number;
   onSelect: (name: string) => void;
-  anchorRef: React.RefObject<HTMLInputElement | null>;
+  anchorRef: React.RefObject<HTMLElement | null>;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -239,6 +233,87 @@ function AutocompleteDropdown({
   );
 }
 
+/** Build highlighted HTML string for contentEditable rendering. */
+function buildHighlightedHTML(
+  text: string,
+  availableVars: Map<string, string>,
+): string {
+  const regex = /(\{\{[^}]+\}\})/g;
+  let lastIndex = 0;
+  let html = "";
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      html += escapeHTML(text.slice(lastIndex, match.index));
+    }
+    const varName = match[1].slice(2, -2).trim();
+    const resolved = availableVars.has(varName);
+    const colorClass = resolved ? "var(--color-success)" : "var(--color-warning)";
+    const resolvedValue = resolved ? escapeHTML(availableVars.get(varName) || "") : "";
+    html += `<span style="color:${colorClass}" data-var="${escapeHTML(varName)}" data-resolved="${resolved}" data-value="${resolvedValue}">${escapeHTML(match[1])}</span>`;
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    html += escapeHTML(text.slice(lastIndex));
+  }
+
+  return html || "<br>"; // <br> keeps the element height when empty
+}
+
+function escapeHTML(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Extract plain text from a contentEditable element. */
+function getPlainText(el: HTMLElement): string {
+  return el.textContent || "";
+}
+
+/** Save and restore cursor position in a contentEditable element. */
+function saveCursorOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0);
+  const preRange = document.createRange();
+  preRange.selectNodeContents(el);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  return preRange.toString().length;
+}
+
+function restoreCursorOffset(el: HTMLElement, offset: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+
+  let remaining = offset;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+
+  while ((node = walker.nextNode())) {
+    const len = node.textContent?.length || 0;
+    if (remaining <= len) {
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    remaining -= len;
+  }
+
+  // If offset is past the end, place cursor at end
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 export function VariableInput({
   value,
   onChange,
@@ -247,6 +322,8 @@ export function VariableInput({
   className = "",
   onKeyDown,
   onPaste,
+  onFocus: onFocusProp,
+  onBlur: onBlurProp,
   wrapperClassName = "",
 }: {
   value: string;
@@ -256,16 +333,68 @@ export function VariableInput({
   className?: string;
   onKeyDown?: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   wrapperClassName?: string;
 }) {
   const availableVars = useAvailableVars(collectionId);
-  const hasVars = value.includes("{{");
   const [focused, setFocused] = useState(false);
   const [acState, setAcState] = useState<{ prefix: string; start: number } | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [tooltip, setTooltip] = useState<{ varName: string; resolved: boolean; value: string; rect: DOMRect } | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  // Track last value we set via innerHTML to avoid re-rendering on our own changes
+  const lastValueRef = useRef(value);
 
-  const showOverlay = hasVars && !focused;
+  const handleMouseOver = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const varName = target.getAttribute?.("data-var");
+    if (varName) {
+      const rect = target.getBoundingClientRect();
+      setTooltip({
+        varName,
+        resolved: target.getAttribute("data-resolved") === "true",
+        value: target.getAttribute("data-value") || "",
+        rect,
+      });
+    } else {
+      setTooltip(null);
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setTooltip(null);
+  }, []);
+
+  const highlightedHTML = useMemo(
+    () => buildHighlightedHTML(value, availableVars),
+    [value, availableVars],
+  );
+
+  // Update innerHTML when value or highlighting changes, preserving cursor
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+
+    const currentText = getPlainText(el);
+    if (currentText === value && lastValueRef.current === value) {
+      // Text hasn't changed — still re-render highlights but preserve cursor
+      const offset = focused ? saveCursorOffset(el) : 0;
+      el.innerHTML = highlightedHTML;
+      if (focused) {
+        restoreCursorOffset(el, offset);
+      }
+    } else {
+      // Value changed externally (e.g. autocomplete, paste-curl)
+      const offset = focused ? saveCursorOffset(el) : 0;
+      el.innerHTML = highlightedHTML;
+      lastValueRef.current = value;
+      if (focused) {
+        // For external changes, try to maintain cursor but clamp to new length
+        restoreCursorOffset(el, Math.min(offset, value.length));
+      }
+    }
+  }, [highlightedHTML, value, focused]);
 
   const filteredVars = useMemo(() => {
     if (!acState) return [];
@@ -294,23 +423,33 @@ export function VariableInput({
 
   const completeVar = useCallback(
     (varName: string) => {
-      if (!acState || !inputRef.current) return;
-      // Replace from `{{` to cursor with `{{varName}}`
+      if (!acState || !editorRef.current) return;
+      const cursorPos = saveCursorOffset(editorRef.current);
       const before = value.slice(0, acState.start);
-      const after = value.slice(inputRef.current.selectionStart ?? value.length);
+      const after = value.slice(cursorPos);
       const completed = `${before}{{${varName}}}${after}`;
       onChange(completed);
       setAcState(null);
+      lastValueRef.current = completed;
       // Move cursor after the closing `}}`
       const newPos = acState.start + varName.length + 4;
       requestAnimationFrame(() => {
-        inputRef.current?.setSelectionRange(newPos, newPos);
+        if (editorRef.current) {
+          editorRef.current.innerHTML = buildHighlightedHTML(completed, availableVars);
+          restoreCursorOffset(editorRef.current, newPos);
+        }
       });
     },
-    [acState, value, onChange],
+    [acState, value, onChange, availableVars],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Block Enter (no newlines in single-line input)
+    if (e.key === "Enter" && !e.metaKey && !e.ctrlKey && !(acState && filteredVars.length > 0)) {
+      e.preventDefault();
+      return;
+    }
+
     if (acState && filteredVars.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -336,49 +475,94 @@ export function VariableInput({
     onKeyDown?.(e);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVal = e.target.value;
+  const handleInput = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const newVal = getPlainText(el);
+    lastValueRef.current = newVal;
     onChange(newVal);
-    updateAutocomplete(newVal, e.target.selectionStart ?? newVal.length);
-  };
+    const cursorPos = saveCursorOffset(el);
+    updateAutocomplete(newVal, cursorPos);
+  }, [onChange, updateAutocomplete]);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      // Check if the onPaste handler wants to handle it (e.g. curl paste)
+      if (onPaste) {
+        // Cast since onPaste expects HTMLInputElement but the event shape is the same
+        onPaste(e as unknown as React.ClipboardEvent<HTMLInputElement>);
+        if (e.defaultPrevented) return;
+      }
+      // Paste as plain text
+      e.preventDefault();
+      const text = e.clipboardData.getData("text/plain").replace(/\n/g, " ");
+      document.execCommand("insertText", false, text);
+    },
+    [onPaste],
+  );
+
+  const showPlaceholder = !value && placeholder;
 
   return (
     <div className={`relative ${wrapperClassName}`}>
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={handleChange}
-        placeholder={placeholder}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
         onKeyDown={handleKeyDown}
-        onPaste={onPaste}
+        onPaste={handlePaste}
+        onMouseOver={handleMouseOver}
+        onMouseLeave={handleMouseLeave}
         onFocus={() => {
           setFocused(true);
-          if (inputRef.current) {
-            updateAutocomplete(value, inputRef.current.selectionStart ?? value.length);
+          onFocusProp?.();
+          if (editorRef.current) {
+            const cursorPos = saveCursorOffset(editorRef.current);
+            updateAutocomplete(value, cursorPos);
           }
         }}
         onBlur={() => {
           setFocused(false);
           setAcState(null);
+          onBlurProp?.();
         }}
-        className={`w-full ${className} ${showOverlay ? "text-transparent caret-text-primary" : ""}`}
+        style={{ scrollbarWidth: "none" }}
+        className={`w-full whitespace-nowrap overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden ${className}`}
         spellCheck={false}
+        role="textbox"
+        data-placeholder={placeholder}
       />
-      {showOverlay && (
+      {showPlaceholder && (
         <div
-          onClick={() => inputRef.current?.focus()}
-          className={`absolute inset-0 flex items-center overflow-hidden whitespace-nowrap cursor-text ${className.includes("px-3") ? "px-3" : "px-2"} ${className.includes("py-2") ? "py-2" : "py-1.5"} text-sm font-mono`}
+          className="absolute inset-0 flex items-center pointer-events-none text-text-muted px-3 py-2 text-sm font-mono"
+          onClick={() => editorRef.current?.focus()}
         >
-          <VariableText text={value} collectionId={collectionId} />
+          {placeholder}
         </div>
+      )}
+      {tooltip && (
+        <Tooltip anchor={tooltip.rect}>
+          {tooltip.resolved ? (
+            <>
+              <span className="text-text-muted">{tooltip.varName}</span>
+              <span className="text-text-muted mx-1">=</span>
+              <span className="text-text-primary font-mono">{tooltip.value}</span>
+            </>
+          ) : (
+            <>
+              <span className="text-warning">{tooltip.varName}</span>
+              <span className="text-text-muted ml-1">not set</span>
+            </>
+          )}
+        </Tooltip>
       )}
       {focused && acState && filteredVars.length > 0 && (
         <AutocompleteDropdown
           items={filteredVars}
           selectedIndex={selectedIdx}
           onSelect={completeVar}
-          anchorRef={inputRef}
+          anchorRef={editorRef}
         />
       )}
     </div>

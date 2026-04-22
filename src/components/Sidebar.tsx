@@ -7,6 +7,7 @@ import { HistoryList } from "./HistoryList";
 import { ImportDialog } from "./ImportDialog";
 import { useState, useCallback, useEffect, useRef } from "react";
 
+
 export function Sidebar() {
   const { collections, sidebarWidth, setSidebarWidth, fetchCollections, fetchHistory } =
     useAppStore();
@@ -59,6 +60,24 @@ export function Sidebar() {
     setIsCreating(false);
     fetchCollections();
   };
+
+  const handleCollectionReorder = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      const ordered = collections.map((c) => c.id);
+      const [moved] = ordered.splice(fromIndex, 1);
+      ordered.splice(toIndex, 0, moved);
+      // Optimistic update
+      const reordered = ordered.map((id) => collections.find((c) => c.id === id)!);
+      useAppStore.setState({ collections: reordered });
+      // Persist
+      fetch("/api/collections/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collections: ordered }),
+      });
+    },
+    [collections],
+  );
 
   return (
     <>
@@ -133,8 +152,13 @@ export function Sidebar() {
             )}
 
             <div className="flex-1 overflow-y-auto py-1">
-              {collections.map((collection) => (
-                <CollectionTree key={collection.id} collection={collection} />
+              {collections.map((collection, index) => (
+                <CollectionTree
+                  key={collection.id}
+                  collection={collection}
+                  index={index}
+                  onCollectionReorder={handleCollectionReorder}
+                />
               ))}
               {collections.length === 0 && (
                 <p className="text-text-muted text-xs px-3 py-4 text-center">

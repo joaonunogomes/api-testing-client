@@ -142,8 +142,6 @@ function loadSession(): PersistedSession | null {
   }
 }
 
-const savedSession = loadSession();
-
 // Abort controllers for in-flight requests (not stored in Zustand — not serializable)
 const abortControllers = new Map<string, AbortController>();
 
@@ -152,15 +150,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   openTabs: [],
   activeTabId: null,
   environments: [],
-  selectedEnvironmentId: savedSession?.selectedEnvironmentId ?? null,
+  selectedEnvironmentId: null,
   oauth2Tokens: new Map(),
   mockServers: [],
   history: [],
   sessionRuntimeVars: {},
   sessionEnvOverrides: {},
-  theme: savedSession?.theme ?? "dark",
+  theme: "dark",
   sidebarWidth: 280,
-  expandedNodes: new Set(savedSession?.expandedNodes ?? []),
+  expandedNodes: new Set<string>(),
 
   setCollections: (collections) => set({ collections }),
   setEnvironments: (environments) => set({ environments }),
@@ -596,6 +594,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!session) {
       sessionRestored = true;
       return;
+    }
+
+    // Restore UI state from localStorage (deferred to avoid hydration mismatch)
+    set({
+      selectedEnvironmentId: session.selectedEnvironmentId ?? null,
+      expandedNodes: new Set(session.expandedNodes ?? []),
+      ...(session.theme ? { theme: session.theme } : {}),
+    });
+    if (session.theme) {
+      document.documentElement.setAttribute("data-theme", session.theme);
     }
 
     // Re-open saved tabs
