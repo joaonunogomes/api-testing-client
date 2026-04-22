@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { BodyEditor } from "./BodyEditor";
@@ -8,11 +8,40 @@ import { AuthEditor } from "./AuthEditor";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { VariableInput } from "./VariableHighlight";
 import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
-import type { RequestFile } from "@/lib/types";
+import type { RequestFile, KeyValuePair } from "@/lib/types";
 import { normalizeKVPairs } from "@/lib/types";
 import { parseCurl } from "@/lib/curl-parser";
 import { Select } from "./Select";
 import { MocksEditor } from "./MocksEditor";
+
+/** Split a URL string at the first '?' into [baseUrl, queryString]. */
+function splitUrlAtQuery(url: string): [string, string] {
+  const idx = url.indexOf("?");
+  if (idx === -1) return [url, ""];
+  return [url.substring(0, idx), url.substring(idx + 1)];
+}
+
+/** Parse a raw query string into KeyValuePair[]. */
+function parseQueryString(qs: string): KeyValuePair[] {
+  if (!qs) return [];
+  return qs.split("&").map((part) => {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx === -1) return { key: part, value: "", enabled: true };
+    return {
+      key: part.substring(0, eqIdx),
+      value: part.substring(eqIdx + 1),
+      enabled: true,
+    };
+  });
+}
+
+/** Build a query string from enabled params (no encoding — preserves variables). */
+function buildQueryString(params: KeyValuePair[]): string {
+  return params
+    .filter((p) => p.enabled !== false && p.key)
+    .map((p) => `${p.key}=${p.value}`)
+    .join("&");
+}
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 
@@ -134,6 +163,43 @@ export function RequestEditor() {
   const paramPairs = normalizeKVPairs(localRequest.request.params);
   const headerPairs = normalizeKVPairs(localRequest.request.headers);
 
+  // --- Bidirectional URL <-> Params sync ---
+
+  // Ensure base URL has no query string (one-time migration for existing requests)
+  const baseUrl = useMemo(() => splitUrlAtQuery(localRequest.request.url)[0], [localRequest.request.url]);
+
+  // On first load, if the stored URL contains query params, extract them into params list
+  useEffect(() => {
+    const [base, qs] = splitUrlAtQuery(localRequest.request.url);
+    if (qs) {
+      const urlParams = parseQueryString(qs);
+      const existing = normalizeKVPairs(localRequest.request.params);
+      updateRequestDef({ url: base, params: [...existing, ...urlParams] });
+    }
+    // Only run on mount (or when tab changes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.id]);
+
+  // Compute the full display URL = base + query string from enabled params
+  const displayUrl = useMemo(() => {
+    const qs = buildQueryString(paramPairs);
+    return qs ? `${baseUrl}?${qs}` : baseUrl;
+  }, [baseUrl, paramPairs]);
+
+  // When user edits the URL bar, parse query params and sync to params list
+  const handleUrlChange = (newUrl: string) => {
+    const [newBase, qs] = splitUrlAtQuery(newUrl);
+    const urlParams = parseQueryString(qs);
+    // Keep disabled params from existing list
+    const disabledParams = paramPairs.filter((p) => p.enabled === false);
+    updateRequestDef({ url: newBase, params: [...urlParams, ...disabledParams] });
+  };
+
+  // When user edits the params list, just update params (displayUrl auto-updates)
+  const handleParamsChange = (newParams: KeyValuePair[]) => {
+    updateRequestDef({ params: newParams });
+  };
+
   const mockCount = localRequest.mocks?.length || 0;
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -157,8 +223,8 @@ export function RequestEditor() {
         />
 
         <VariableInput
-          value={localRequest.request.url}
-          onChange={(v) => updateRequestDef({ url: v })}
+          value={displayUrl}
+          onChange={handleUrlChange}
           placeholder="https://api.example.com/endpoint"
           collectionId={tab.collectionId}
           wrapperClassName="flex-1"
@@ -224,9 +290,7 @@ export function RequestEditor() {
         {activeEditorTab === "params" && (
           <KeyValueEditor
             pairs={paramPairs}
-            onChange={(pairs) => {
-              updateRequestDef({ params: pairs });
-            }}
+            onChange={handleParamsChange}
             collectionId={tab.collectionId}
             keyPlaceholder="Parameter"
             valuePlaceholder="Value"
