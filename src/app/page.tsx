@@ -79,6 +79,10 @@ export default function Home() {
         e.preventDefault();
         saveActiveTab();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
+        e.preventDefault();
+        useAppStore.getState().openNewTab();
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         e.preventDefault();
         const state = useAppStore.getState();

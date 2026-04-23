@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppStore } from "@/stores/app-store";
 import type CodeMirrorType from "@uiw/react-codemirror";
 
@@ -32,7 +32,14 @@ function formatSize(bytes: number): string {
 
 export function ResponseViewer() {
   const { openTabs, activeTabId, updateTabRequest, theme: appTheme } = useAppStore();
-  const [activeTab, setActiveTab] = useState<ResponseTab>("body");
+  const responseTabsRef = useRef<Record<string, ResponseTab>>({});
+  const [, forceRender] = useState(0);
+  const activeTab = responseTabsRef.current[activeTabId ?? ""] ?? "body";
+  const setActiveTab = (tab: ResponseTab) => {
+    responseTabsRef.current[activeTabId ?? ""] = tab;
+    forceRender((n) => n + 1);
+  };
+  useEffect(() => { forceRender((n) => n + 1); }, [activeTabId]);
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [savedMock, setSavedMock] = useState(false);
 

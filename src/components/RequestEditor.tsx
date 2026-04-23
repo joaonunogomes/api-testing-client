@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { BodyEditor } from "./BodyEditor";
@@ -68,7 +68,15 @@ export function RequestEditor() {
     saveTab,
   } = useAppStore();
 
-  const [activeEditorTab, setActiveEditorTab] = useState<Tab>("params");
+  const editorTabsRef = useRef<Record<string, Tab>>({});
+  const [, forceRender] = useState(0);
+  const activeEditorTab = editorTabsRef.current[activeTabId ?? ""] ?? "params";
+  const setActiveEditorTab = (tab: Tab) => {
+    editorTabsRef.current[activeTabId ?? ""] = tab;
+    forceRender((n) => n + 1);
+  };
+  // Re-render when activeTabId changes so the correct sub-tab is shown
+  useEffect(() => { forceRender((n) => n + 1); }, [activeTabId]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const tab = openTabs.find((t) => t.id === activeTabId);
@@ -180,6 +188,8 @@ export function RequestEditor() {
           ...(parsed.auth ? { auth: parsed.auth } : {}),
         },
       });
+      // Reset local URL bar state so the display URL (derived from the updated request) is shown
+      setUrlBarValue(null);
     }
   };
 
@@ -310,7 +320,7 @@ export function RequestEditor() {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-auto p-3">
         {activeEditorTab === "params" && (
           <KeyValueEditor
             pairs={paramPairs}
@@ -328,6 +338,7 @@ export function RequestEditor() {
               updateRequestDef({ headers: pairs });
             }}
             collectionId={tab.collectionId}
+            allowBulkEdit
           />
         )}
 

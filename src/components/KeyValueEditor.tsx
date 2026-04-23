@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { VariableInput } from "./VariableHighlight";
 
 interface KeyValuePair {
@@ -14,6 +15,29 @@ interface KeyValueEditorProps {
   keyPlaceholder?: string;
   valuePlaceholder?: string;
   collectionId?: string | null;
+  allowBulkEdit?: boolean;
+}
+
+function pairsToRawText(pairs: KeyValuePair[]): string {
+  return pairs
+    .filter((p) => p.enabled !== false)
+    .map((p) => `${p.key}: ${p.value}`)
+    .join("\n");
+}
+
+function rawTextToPairs(text: string): KeyValuePair[] {
+  return text
+    .split("\n")
+    .filter((line) => line.trim())
+    .map((line) => {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx === -1) return { key: line.trim(), value: "", enabled: true };
+      return {
+        key: line.substring(0, colonIdx).trim(),
+        value: line.substring(colonIdx + 1).trim(),
+        enabled: true,
+      };
+    });
 }
 
 export function KeyValueEditor({
@@ -22,7 +46,11 @@ export function KeyValueEditor({
   keyPlaceholder = "Key",
   valuePlaceholder = "Value",
   collectionId = null,
+  allowBulkEdit = false,
 }: KeyValueEditorProps) {
+  const [bulkEdit, setBulkEdit] = useState(false);
+  const [rawText, setRawText] = useState("");
+
   const updatePair = (index: number, field: "key" | "value", val: string) => {
     const updated = [...pairs];
     updated[index] = { ...updated[index], [field]: val };
@@ -46,9 +74,70 @@ export function KeyValueEditor({
     onChange([...pairs, { key: "", value: "", enabled: true }]);
   };
 
+  const enterBulkEdit = () => {
+    setRawText(pairsToRawText(pairs));
+    setBulkEdit(true);
+  };
+
+  const applyBulkEdit = () => {
+    const disabledPairs = pairs.filter((p) => p.enabled === false);
+    onChange([...rawTextToPairs(rawText), ...disabledPairs]);
+    setBulkEdit(false);
+  };
+
+  const cancelBulkEdit = () => {
+    setBulkEdit(false);
+  };
+
+  if (bulkEdit) {
+    return (
+      <div className="text-sm">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-text-muted">One header per line, format: <code className="text-accent">Key: Value</code></span>
+          <div className="flex gap-2">
+            <button
+              onClick={cancelBulkEdit}
+              className="text-xs text-text-muted hover:text-text-primary transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={applyBulkEdit}
+              className="text-xs text-accent hover:text-accent-hover transition-colors"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+        <textarea
+          value={rawText}
+          onChange={(e) => setRawText(e.target.value)}
+          className="w-full h-64 bg-bg-secondary border border-border rounded px-3 py-2 text-sm font-mono text-text-primary outline-none focus:border-accent resize-y"
+          placeholder={`${keyPlaceholder}: ${valuePlaceholder}\nContent-Type: application/json`}
+          spellCheck={false}
+        />
+        {pairs.some((p) => p.enabled === false) && (
+          <p className="mt-1 text-xs text-text-muted">
+            Disabled entries are preserved and not shown in bulk edit.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="text-sm">
-      <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-0 border border-border rounded overflow-hidden">
+    <div className="text-sm overflow-x-auto">
+      {allowBulkEdit && (
+        <div className="flex justify-end mb-1">
+          <button
+            onClick={enterBulkEdit}
+            className="text-xs text-text-muted hover:text-accent transition-colors"
+          >
+            Bulk Edit
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-0 border border-border rounded overflow-hidden min-w-[500px]">
         <div className="bg-bg-tertiary px-2 py-1.5 text-text-muted text-xs font-medium border-b border-border" />
         <div className="bg-bg-tertiary px-2 py-1.5 text-text-muted text-xs font-medium border-b border-l border-border">
           {keyPlaceholder}
