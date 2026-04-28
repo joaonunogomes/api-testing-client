@@ -10,8 +10,8 @@ import type {
 } from "@/lib/types";
 
 export interface OpenTab {
-  id: string; // collectionId/requestId or __collection__collectionId
-  type?: "request" | "collection-settings";
+  id: string; // collectionId/requestId, __collection__collectionId, __history__, or __environments__
+  type?: "request" | "collection-settings" | "history" | "environments";
   collectionId: string;
   requestId: string;
   label: string;
@@ -21,6 +21,9 @@ export interface OpenTab {
   isExecuting: boolean;
   isDirty: boolean;
 }
+
+export const HISTORY_TAB_ID = "__history__";
+export const ENVIRONMENTS_TAB_ID = "__environments__";
 
 interface AppState {
   // Collections
@@ -51,6 +54,7 @@ interface AppState {
   theme: "dark" | "light";
   sidebarWidth: number;
   expandedNodes: Set<string>;
+  focusedNodeId: string | null;
 
   // Actions
   setCollections: (collections: Collection[]) => void;
@@ -59,6 +63,7 @@ interface AppState {
   toggleNode: (nodeId: string) => void;
   setTheme: (theme: "dark" | "light") => void;
   setSidebarWidth: (width: number) => void;
+  setFocusedNodeId: (id: string | null) => void;
   setOAuth2Token: (tokenKey: string, token: OAuth2TokenState) => void;
   setRuntimeVar: (name: string, value: string) => void;
   setMockServers: (servers: MockServerStatus[]) => void;
@@ -80,6 +85,10 @@ interface AppState {
   fetchHistory: () => Promise<void>;
   clearHistory: () => Promise<void>;
   openHistoryEntry: (entry: HistoryEntry) => void;
+  openHistoryTab: () => void;
+
+  // Environments tab
+  openEnvironmentsTab: () => void;
 
   // Fetch actions
   fetchCollections: () => Promise<void>;
@@ -115,10 +124,23 @@ function saveSession(state: AppState) {
       selectedEnvironmentId: state.selectedEnvironmentId,
       activeTabId: state.activeTabId,
       tabs: state.openTabs
-        .filter((t) => t.collectionId) // skip unsaved/untitled tabs
+        .filter(
+          (t) =>
+            t.collectionId ||
+            t.id === HISTORY_TAB_ID ||
+            t.id === ENVIRONMENTS_TAB_ID,
+        ) // skip unsaved/untitled tabs
         .map((t) => ({
           id: t.id,
-          type: t.type || (t.id.startsWith("__collection__") ? "collection-settings" : "request"),
+          type:
+            t.type ||
+            (t.id === HISTORY_TAB_ID
+              ? "history"
+              : t.id === ENVIRONMENTS_TAB_ID
+                ? "environments"
+                : t.id.startsWith("__collection__")
+                  ? "collection-settings"
+                  : "request"),
           collectionId: t.collectionId,
           requestId: t.requestId,
         })),
@@ -159,6 +181,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   theme: "dark",
   sidebarWidth: 280,
   expandedNodes: new Set<string>(),
+  focusedNodeId: null,
 
   setCollections: (collections) => set({ collections }),
   setEnvironments: (environments) => set({ environments }),
@@ -180,6 +203,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ theme });
   },
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
+  setFocusedNodeId: (id) => set({ focusedNodeId: id }),
 
   setOAuth2Token: (tokenKey, token) =>
     set((state) => {
@@ -410,6 +434,61 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ history: [] });
   },
 
+  openHistoryTab: () => {
+    const state = get();
+    state.fetchHistory();
+    const existing = state.openTabs.find((t) => t.id === HISTORY_TAB_ID);
+    if (existing) {
+      set({ activeTabId: HISTORY_TAB_ID });
+      return;
+    }
+    set((s) => ({
+      openTabs: [
+        ...s.openTabs,
+        {
+          id: HISTORY_TAB_ID,
+          type: "history",
+          collectionId: "",
+          requestId: "",
+          label: "History",
+          method: "",
+          request: null,
+          response: null,
+          isExecuting: false,
+          isDirty: false,
+        },
+      ],
+      activeTabId: HISTORY_TAB_ID,
+    }));
+  },
+
+  openEnvironmentsTab: () => {
+    const state = get();
+    const existing = state.openTabs.find((t) => t.id === ENVIRONMENTS_TAB_ID);
+    if (existing) {
+      set({ activeTabId: ENVIRONMENTS_TAB_ID });
+      return;
+    }
+    set((s) => ({
+      openTabs: [
+        ...s.openTabs,
+        {
+          id: ENVIRONMENTS_TAB_ID,
+          type: "environments",
+          collectionId: "",
+          requestId: "",
+          label: "Environments",
+          method: "",
+          request: null,
+          response: null,
+          isExecuting: false,
+          isDirty: false,
+        },
+      ],
+      activeTabId: ENVIRONMENTS_TAB_ID,
+    }));
+  },
+
   openHistoryEntry: (entry: HistoryEntry) => {
     const id = `__new__${Date.now()}`;
     set((s) => ({
@@ -609,7 +688,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Re-open saved tabs
     for (const tab of session.tabs) {
       const isCollectionTab = tab.type === "collection-settings" || tab.id.startsWith("__collection__");
-      if (isCollectionTab) {
+      const isHistoryTab = tab.type === "history" || tab.id === HISTORY_TAB_ID;
+      const isEnvironmentsTab = tab.type === "environments" || tab.id === ENVIRONMENTS_TAB_ID;
+      if (isHistoryTab) {
+        get().openHistoryTab();
+      } else if (isEnvironmentsTab) {
+        get().openEnvironmentsTab();
+      } else if (isCollectionTab) {
         get().openCollectionSettings(tab.collectionId);
       } else if (tab.collectionId && tab.requestId) {
         await get().openRequest(tab.collectionId, tab.requestId);

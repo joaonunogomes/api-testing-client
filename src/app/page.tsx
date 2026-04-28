@@ -7,6 +7,8 @@ import { TabBar } from "@/components/TabBar";
 import { RequestEditor } from "@/components/RequestEditor";
 import { ResponseViewer } from "@/components/ResponseViewer";
 import { CollectionSettings } from "@/components/CollectionSettings";
+import { HistoryList } from "@/components/HistoryList";
+import { EnvironmentEditor } from "@/components/EnvironmentEditor";
 
 export default function Home() {
   const { fetchCollections, fetchEnvironments, fetchMockServers, fetchHistory } = useAppStore();
@@ -24,6 +26,8 @@ export default function Home() {
   const { closeTab, activeTabId, openTabs } = useAppStore();
   const activeTab = openTabs.find((t) => t.id === activeTabId);
   const isCollectionSettings = activeTab?.type === "collection-settings";
+  const isHistory = activeTab?.type === "history";
+  const isEnvironments = activeTab?.type === "environments";
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"shortcuts" | "scripting" | "settings">("shortcuts");
 
@@ -87,7 +91,7 @@ export default function Home() {
         e.preventDefault();
         const state = useAppStore.getState();
         const tab = state.openTabs.find((t) => t.id === state.activeTabId);
-        if (tab && tab.type !== "collection-settings" && !tab.isExecuting) {
+        if (tab && tab.type !== "collection-settings" && tab.type !== "history" && tab.type !== "environments" && !tab.isExecuting) {
           state.executeTab(tab.id);
         }
       }
@@ -214,6 +218,14 @@ export default function Home() {
           {isCollectionSettings ? (
             <div className="flex-1 overflow-hidden">
               <CollectionSettings collectionId={activeTab.collectionId} />
+            </div>
+          ) : isHistory ? (
+            <div className="flex-1 overflow-hidden">
+              <HistoryList />
+            </div>
+          ) : isEnvironments ? (
+            <div className="flex-1 overflow-hidden">
+              <EnvironmentEditor />
             </div>
           ) : (
             <>

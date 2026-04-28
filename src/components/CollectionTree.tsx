@@ -73,6 +73,8 @@ function TreeNodeItem({
     openRequest,
     openCollectionSettings,
     activeTabId,
+    focusedNodeId,
+    setFocusedNodeId,
   } = useAppStore();
 
   const [dropIndicator, setDropIndicator] = useState<DropPosition | null>(null);
@@ -84,8 +86,10 @@ function TreeNodeItem({
   const isCollectionSelected =
     node.type === "collection" &&
     activeTabId === `__collection__${collectionId}`;
+  const isFocused = focusedNodeId === node.id;
 
   const handleClick = () => {
+    setFocusedNodeId(node.id);
     if (node.type === "collection") {
       openCollectionSettings(collectionId);
       toggleNode(node.id);
@@ -287,6 +291,7 @@ function TreeNodeItem({
     <div>
       <div
         ref={rowRef}
+        data-node-id={node.id}
         onClick={handleClick}
         draggable
         onDragStart={handleDragStart}
@@ -298,7 +303,7 @@ function TreeNodeItem({
           isSelected || isCollectionSelected
             ? "bg-bg-hover text-text-primary"
             : "text-text-secondary"
-        } ${indicatorClass}`}
+        } ${isFocused ? "ring-1 ring-accent ring-inset" : ""} ${indicatorClass}`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
       >
         {dropIndicator === "before" && (

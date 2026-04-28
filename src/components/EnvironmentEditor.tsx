@@ -11,12 +11,7 @@ interface EnvVar {
   isSecret: boolean;
 }
 
-interface EnvironmentEditorProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
+export function EnvironmentEditor() {
   const {
     environments,
     selectedEnvironmentId,
@@ -48,20 +43,23 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
     setVars(allVars);
   }, []);
 
-  // Load selected environment when dialog opens
+  // Load selected environment on mount / when environments change
   useEffect(() => {
-    if (open && selectedEnvironmentId) {
+    if (editingEnvId) return;
+    if (selectedEnvironmentId) {
       const env = environments.find((e) => e.id === selectedEnvironmentId);
-      if (env) loadEnvironment(env);
-    } else if (open && environments.length > 0) {
+      if (env) {
+        loadEnvironment(env);
+        return;
+      }
+    }
+    if (environments.length > 0) {
       loadEnvironment(environments[0]);
     }
-  }, [open, selectedEnvironmentId, environments, loadEnvironment]);
+  }, [selectedEnvironmentId, environments, loadEnvironment, editingEnvId]);
 
   const confirmAction = useConfirm();
   const editingEnv = environments.find((e) => e.id === editingEnvId);
-
-  if (!open) return null;
 
   const updateVar = (index: number, field: keyof EnvVar, val: string | boolean) => {
     const updated = [...vars];
@@ -208,27 +206,15 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="bg-bg-primary border border-border rounded-lg w-[700px] max-h-[80vh] flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-          <h2 className="text-base font-semibold text-text-primary">
-            Environments
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-text-primary text-lg leading-none px-1"
-          >
-            x
-          </button>
-        </div>
+    <div className="h-full flex flex-col bg-bg-primary">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-border flex-shrink-0">
+        <h2 className="text-base font-semibold text-text-primary">
+          Environments
+        </h2>
+      </div>
 
-        <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
           {/* Environment list */}
           <div className="w-48 border-r border-border flex flex-col flex-shrink-0">
             <div className="flex-1 overflow-y-auto">
@@ -442,6 +428,5 @@ export function EnvironmentEditor({ open, onClose }: EnvironmentEditorProps) {
           </div>
         </div>
       </div>
-    </div>
   );
 }
