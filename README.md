@@ -116,9 +116,17 @@ The workspace is stored at `~/.userData/workspace` (or `~/.userData/workspace-de
 
 ### Auto-updates
 
-The desktop app checks for new versions on launch (against GitHub Releases). When a new release is available, you'll be prompted to download it; once the download completes, you'll be prompted to restart and apply the update. If you skip the restart, the update is applied automatically on the next quit.
+The desktop app checks for new versions against [GitHub Releases](../../releases). By default it checks once on launch, but you can manage this from the UI:
+
+1. Open the **Reference** dialog (keyboard icon in the header)
+2. Switch to the **Settings** tab — the **Updates** section shows the installed version
+3. Click **Check for updates** to run a manual check
+4. Toggle **Automatically check on startup** to opt in/out of the launch-time check
+
+When an update is available you'll see a **Download** button. Once downloaded, click **Restart to install** to apply it immediately — or skip it and it'll install automatically on the next quit.
 
 > macOS auto-updates require a code-signed build. Unsigned macOS builds will skip the install step.
+> The Updates section is only visible in the desktop app — Docker/web users update by pulling the latest image or rebuilding.
 
 ## Workspace Structure
 

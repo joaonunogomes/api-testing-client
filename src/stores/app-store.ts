@@ -52,6 +52,7 @@ interface AppState {
 
   // UI state
   theme: "dark" | "light";
+  autoCheckUpdates: boolean;
   sidebarWidth: number;
   expandedNodes: Set<string>;
   focusedNodeId: string | null;
@@ -62,6 +63,7 @@ interface AppState {
   setSelectedEnvironmentId: (id: string | null) => void;
   toggleNode: (nodeId: string) => void;
   setTheme: (theme: "dark" | "light") => void;
+  setAutoCheckUpdates: (value: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setFocusedNodeId: (id: string | null) => void;
   setOAuth2Token: (tokenKey: string, token: OAuth2TokenState) => void;
@@ -112,6 +114,7 @@ interface PersistedSession {
   tabs: { id: string; type?: string; collectionId: string; requestId: string }[];
   expandedNodes: string[];
   theme?: "dark" | "light";
+  autoCheckUpdates?: boolean;
 }
 
 const isClient = typeof window !== "undefined";
@@ -146,6 +149,7 @@ function saveSession(state: AppState) {
         })),
       expandedNodes: [...state.expandedNodes],
       theme: state.theme,
+      autoCheckUpdates: state.autoCheckUpdates,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   } catch {
@@ -179,6 +183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sessionRuntimeVars: {},
   sessionEnvOverrides: {},
   theme: "dark",
+  autoCheckUpdates: true,
   sidebarWidth: 280,
   expandedNodes: new Set<string>(),
   focusedNodeId: null,
@@ -202,6 +207,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     document.documentElement.setAttribute("data-theme", theme);
     set({ theme });
   },
+  setAutoCheckUpdates: (value) => set({ autoCheckUpdates: value }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
   setFocusedNodeId: (id) => set({ focusedNodeId: id }),
 
@@ -680,6 +686,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedEnvironmentId: session.selectedEnvironmentId ?? null,
       expandedNodes: new Set(session.expandedNodes ?? []),
       ...(session.theme ? { theme: session.theme } : {}),
+      ...(typeof session.autoCheckUpdates === "boolean"
+        ? { autoCheckUpdates: session.autoCheckUpdates }
+        : {}),
     });
     if (session.theme) {
       document.documentElement.setAttribute("data-theme", session.theme);
@@ -720,7 +729,8 @@ useAppStore.subscribe((state, prevState) => {
     state.activeTabId !== prevState.activeTabId ||
     state.selectedEnvironmentId !== prevState.selectedEnvironmentId ||
     state.expandedNodes !== prevState.expandedNodes ||
-    state.theme !== prevState.theme
+    state.theme !== prevState.theme ||
+    state.autoCheckUpdates !== prevState.autoCheckUpdates
   ) {
     saveSession(state);
   }

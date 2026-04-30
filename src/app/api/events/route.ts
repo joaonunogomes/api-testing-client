@@ -6,6 +6,7 @@ export async function GET() {
   startWatcher();
 
   const encoder = new TextEncoder();
+  let cleanup: (() => void) | null = null;
   const stream = new ReadableStream({
     start(controller) {
       const removeListener = addChangeListener((event, filePath) => {
@@ -13,7 +14,6 @@ export async function GET() {
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       });
 
-      // Send keepalive every 30s
       const keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));
@@ -22,20 +22,14 @@ export async function GET() {
         }
       }, 30000);
 
-      // Cleanup when client disconnects
-      const cleanup = () => {
+      cleanup = () => {
         removeListener();
         clearInterval(keepalive);
       };
 
-      // The stream will be closed when the client disconnects
       controller.enqueue(encoder.encode(": connected\n\n"));
-
-      // Store cleanup for when stream is cancelled
-      (stream as unknown as { _cleanup: () => void })._cleanup = cleanup;
     },
     cancel() {
-      const cleanup = (this as unknown as { _cleanup?: () => void })._cleanup;
       cleanup?.();
     },
   });

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, utilityProcess, Menu, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, utilityProcess, Menu, ipcMain, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { spawn } = require("child_process");
 const path = require("path");
@@ -174,6 +174,22 @@ function createWindow(port) {
   });
   ipcMain.on("window-close", () => mainWindow?.close());
 
+  ipcMain.handle("app:get-version", () => app.getVersion());
+  ipcMain.handle("updater:check", async () => {
+    if (isDev) return { dev: true };
+    try {
+      return await autoUpdater.checkForUpdates();
+    } catch (err) {
+      mainWindow?.webContents.send("updater:status", {
+        state: "error",
+        message: err?.message || String(err),
+      });
+      throw err;
+    }
+  });
+  ipcMain.handle("updater:download", () => autoUpdater.downloadUpdate());
+  ipcMain.handle("updater:install", () => autoUpdater.quitAndInstall());
+
   mainWindow.loadURL(`http://localhost:${port}`);
 
   if (isDev) {
@@ -191,38 +207,18 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on("update-available", async (info) => {
-    const { response } = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      buttons: ["Download", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Available",
-      message: `Version ${info.version} is available.`,
-      detail: "Would you like to download it now? You can keep using the app while it downloads.",
-    });
-    if (response === 0) autoUpdater.downloadUpdate();
-  });
+  const send = (payload) => mainWindow?.webContents.send("updater:status", payload);
 
-  autoUpdater.on("update-downloaded", async (info) => {
-    const { response } = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      buttons: ["Restart Now", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Ready",
-      message: `Version ${info.version} has been downloaded.`,
-      detail: "Restart the app to apply the update. Otherwise it will install on next quit.",
-    });
-    if (response === 0) autoUpdater.quitAndInstall();
-  });
-
+  autoUpdater.on("checking-for-update", () => send({ state: "checking" }));
+  autoUpdater.on("update-available", (info) => send({ state: "available", info }));
+  autoUpdater.on("update-not-available", (info) => send({ state: "not-available", info }));
+  autoUpdater.on("download-progress", (progress) =>
+    send({ state: "downloading", percent: progress?.percent ?? 0 }),
+  );
+  autoUpdater.on("update-downloaded", (info) => send({ state: "downloaded", info }));
   autoUpdater.on("error", (err) => {
     console.error("[autoUpdater]", err);
-  });
-
-  autoUpdater.checkForUpdates().catch((err) => {
-    console.error("[autoUpdater] checkForUpdates failed", err);
+    send({ state: "error", message: err?.message || String(err) });
   });
 }
 

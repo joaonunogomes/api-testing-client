@@ -31,7 +31,74 @@ export default function Home() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"shortcuts" | "scripting" | "settings">("shortcuts");
 
-  const { theme, setTheme } = useAppStore();
+  const { theme, setTheme, autoCheckUpdates, setAutoCheckUpdates } = useAppStore();
+
+  type UpdateStatus =
+    | { state: "idle" }
+    | { state: "checking" }
+    | { state: "available"; info?: { version?: string } }
+    | { state: "not-available"; info?: { version?: string } }
+    | { state: "downloading"; percent?: number }
+    | { state: "downloaded"; info?: { version?: string } }
+    | { state: "error"; message?: string }
+    | { state: "dev" };
+  type UpdaterApi = {
+    getAppVersion?: () => Promise<string>;
+    checkForUpdates?: () => Promise<unknown>;
+    downloadUpdate?: () => Promise<unknown>;
+    installUpdate?: () => Promise<unknown>;
+    onUpdateStatus?: (cb: (payload: UpdateStatus) => void) => () => void;
+  };
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ state: "idle" });
+
+  useEffect(() => {
+    if (!electronPlatform) return;
+    const api = (window as unknown as { electron?: UpdaterApi }).electron;
+    api?.getAppVersion?.().then((v) => setAppVersion(v)).catch(() => {});
+    const off = api?.onUpdateStatus?.((payload) => {
+      setUpdateStatus(payload);
+    });
+    return () => {
+      off?.();
+    };
+  }, [electronPlatform]);
+
+  useEffect(() => {
+    if (!electronPlatform || !autoCheckUpdates) return;
+    const api = (window as unknown as { electron?: UpdaterApi }).electron;
+    api?.checkForUpdates?.().then((res) => {
+      if (res && typeof res === "object" && "dev" in res && (res as { dev?: boolean }).dev) {
+        setUpdateStatus({ state: "dev" });
+      }
+    }).catch((err) => {
+      setUpdateStatus({ state: "error", message: err?.message ?? String(err) });
+    });
+    // run once per session on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [electronPlatform]);
+
+  const runUpdateCheck = () => {
+    const api = (window as unknown as { electron?: UpdaterApi }).electron;
+    setUpdateStatus({ state: "checking" });
+    api?.checkForUpdates?.().then((res) => {
+      if (res && typeof res === "object" && "dev" in res && (res as { dev?: boolean }).dev) {
+        setUpdateStatus({ state: "dev" });
+      }
+    }).catch((err) => {
+      setUpdateStatus({ state: "error", message: err?.message ?? String(err) });
+    });
+  };
+  const runUpdateDownload = () => {
+    const api = (window as unknown as { electron?: UpdaterApi }).electron;
+    api?.downloadUpdate?.().catch((err) => {
+      setUpdateStatus({ state: "error", message: err?.message ?? String(err) });
+    });
+  };
+  const runUpdateInstall = () => {
+    const api = (window as unknown as { electron?: UpdaterApi }).electron;
+    api?.installUpdate?.().catch(() => {});
+  };
 
   // Apply theme on mount
   useEffect(() => {
@@ -348,6 +415,84 @@ export default function Home() {
                       ))}
                     </div>
                   </section>
+
+                  {electronPlatform && (
+                    <section>
+                      <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">Updates</h4>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">Current version</span>
+                          <span className="text-text-muted font-mono text-xs">
+                            {appVersion ? `v${appVersion}` : "—"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-text-secondary">
+                            {updateStatus.state === "idle" && "Check for the latest release"}
+                            {updateStatus.state === "checking" && "Checking…"}
+                            {updateStatus.state === "not-available" && "You're up to date"}
+                            {updateStatus.state === "available" &&
+                              `Version ${updateStatus.info?.version ?? ""} available`}
+                            {updateStatus.state === "downloading" &&
+                              `Downloading… ${Math.round(updateStatus.percent ?? 0)}%`}
+                            {updateStatus.state === "downloaded" &&
+                              `Version ${updateStatus.info?.version ?? ""} ready`}
+                            {updateStatus.state === "dev" && "Updates disabled in dev"}
+                            {updateStatus.state === "error" && (
+                              <span className="text-red-400">
+                                {updateStatus.message ?? "Update failed"}
+                              </span>
+                            )}
+                          </span>
+                          {updateStatus.state === "available" ? (
+                            <button
+                              onClick={runUpdateDownload}
+                              className="px-3 py-1.5 rounded border border-accent bg-accent/10 text-accent text-xs hover:bg-accent/20 transition-colors"
+                            >
+                              Download
+                            </button>
+                          ) : updateStatus.state === "downloaded" ? (
+                            <button
+                              onClick={runUpdateInstall}
+                              className="px-3 py-1.5 rounded border border-accent bg-accent/10 text-accent text-xs hover:bg-accent/20 transition-colors"
+                            >
+                              Restart to install
+                            </button>
+                          ) : updateStatus.state === "downloading" ? (
+                            <button
+                              disabled
+                              className="px-3 py-1.5 rounded border border-border text-text-muted text-xs cursor-not-allowed"
+                            >
+                              Downloading…
+                            </button>
+                          ) : (
+                            <button
+                              onClick={runUpdateCheck}
+                              disabled={updateStatus.state === "checking"}
+                              className="px-3 py-1.5 rounded border border-border text-text-secondary text-xs hover:border-border-light hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {updateStatus.state === "error" ? "Retry" : "Check for updates"}
+                            </button>
+                          )}
+                        </div>
+
+                        <label className="flex items-center justify-between cursor-pointer">
+                          <span className="text-text-secondary">Automatically check on startup</span>
+                          <span className="relative inline-flex">
+                            <input
+                              type="checkbox"
+                              checked={autoCheckUpdates}
+                              onChange={(e) => setAutoCheckUpdates(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <span className="w-9 h-5 bg-bg-secondary border border-border rounded-full peer-checked:bg-accent/30 peer-checked:border-accent transition-colors" />
+                            <span className="absolute left-0.5 top-0.5 w-4 h-4 bg-text-muted rounded-full peer-checked:bg-accent peer-checked:translate-x-4 transition-transform" />
+                          </span>
+                        </label>
+                      </div>
+                    </section>
+                  )}
                 </div>
               )}
 

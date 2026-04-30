@@ -34,10 +34,16 @@ jobs:
       - name: Build Next.js
         run: pnpm build
 
-      - name: Build & publish Electron (macOS ${{ matrix.arch }})
+      - name: Build Electron (macOS ${{ matrix.arch }})
+        run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never
+
+      - name: Upload installers to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish always
+        run: |
+          shopt -s nullglob
+          files=(dist/*.dmg dist/*.dmg.blockmap dist/*-mac.zip dist/*-mac.zip.blockmap dist/latest-mac.yml)
+          gh release upload "${{ github.event.release.tag_name }}" "${files[@]}" --clobber
 
   build-windows:
     runs-on: windows-latest
@@ -66,7 +72,14 @@ jobs:
       - name: Build Next.js
         run: pnpm build
 
-      - name: Build & publish Electron (Windows)
+      - name: Build Electron (Windows)
+        run: pnpm exec electron-builder --win --publish never
+
+      - name: Upload installers to release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm exec electron-builder --win --publish always
+        run: |
+          shopt -s nullglob
+          files=(dist/*.exe dist/*.exe.blockmap dist/latest.yml)
+          gh release upload "${{ github.event.release.tag_name }}" "${files[@]}" --clobber
