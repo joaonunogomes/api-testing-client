@@ -67,7 +67,8 @@
       {
         "provider": "github",
         "owner": "joaonunogomes",
-        "repo": "api-testing-client"
+        "repo": "api-testing-client",
+        "releaseType": "release"
       }
     ],
     "files": [
