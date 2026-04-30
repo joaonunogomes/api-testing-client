@@ -1,4 +1,5 @@
-const { app, BrowserWindow, utilityProcess, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, utilityProcess, Menu, ipcMain, shell, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { spawn } = require("child_process");
 const path = require("path");
 const net = require("net");
@@ -184,6 +185,47 @@ function createWindow(port) {
   });
 }
 
+function setupAutoUpdater() {
+  if (isDev) return;
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", async (info) => {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Available",
+      message: `Version ${info.version} is available.`,
+      detail: "Would you like to download it now? You can keep using the app while it downloads.",
+    });
+    if (response === 0) autoUpdater.downloadUpdate();
+  });
+
+  autoUpdater.on("update-downloaded", async (info) => {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      buttons: ["Restart Now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Ready",
+      message: `Version ${info.version} has been downloaded.`,
+      detail: "Restart the app to apply the update. Otherwise it will install on next quit.",
+    });
+    if (response === 0) autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("[autoUpdater]", err);
+  });
+
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error("[autoUpdater] checkForUpdates failed", err);
+  });
+}
+
 app.on("second-instance", () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -196,6 +238,7 @@ app.whenReady().then(async () => {
   await startNextServer(port);
   await waitForServer(port);
   createWindow(port);
+  setupAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

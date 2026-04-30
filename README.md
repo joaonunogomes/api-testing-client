@@ -114,6 +114,12 @@ The desktop app embeds a Next.js standalone server that runs locally. The Electr
 
 The workspace is stored at `~/.userData/workspace` (or `~/.userData/workspace-dev` in development).
 
+### Auto-updates
+
+The desktop app checks for new versions on launch (against GitHub Releases). When a new release is available, you'll be prompted to download it; once the download completes, you'll be prompted to restart and apply the update. If you skip the restart, the update is applied automatically on the next quit.
+
+> macOS auto-updates require a code-signed build. Unsigned macOS builds will skip the install step.
+
 ## Workspace Structure
 
 A workspace is a directory containing `collections/` and `environments/` folders. Point the app at any workspace directory — it will scan and load everything automatically.

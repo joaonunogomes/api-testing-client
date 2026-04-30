@@ -7,6 +7,8 @@ on:
 jobs:
   build-mac:
     runs-on: macos-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         arch: [x64, arm64]
@@ -28,19 +30,15 @@ jobs:
       - name: Build Next.js
         run: pnpm build
 
-      - name: Build Electron (macOS ${{ matrix.arch }})
-        run: pnpm exec electron-builder --mac --${{ matrix.arch }}
-
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-${{ matrix.arch }}
-          path: |
-            dist/*.dmg
-            dist/*.zip
+      - name: Build & publish Electron (macOS ${{ matrix.arch }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish always
 
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -59,29 +57,7 @@ jobs:
       - name: Build Next.js
         run: pnpm build
 
-      - name: Build Electron (Windows)
-        run: pnpm exec electron-builder --win
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: |
-            dist/*.exe
-
-  release:
-    needs: [build-mac, build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Upload assets to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*
+      - name: Build & publish Electron (Windows)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec electron-builder --win --publish always
