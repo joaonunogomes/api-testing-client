@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Sync package.json version to release tag
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"; VERSION="${VERSION#.}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
       - name: Build Next.js
         run: pnpm build
 
@@ -49,6 +55,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync package.json version to release tag
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"; VERSION="${VERSION#.}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build Next.js
         run: pnpm build
