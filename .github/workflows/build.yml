@@ -1,8 +1,10 @@
 name: Build Installers
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 jobs:
   build-mac:
@@ -27,7 +29,7 @@ jobs:
 
       - name: Sync package.json version to release tag
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"; VERSION="${VERSION#.}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
@@ -43,7 +45,7 @@ jobs:
         run: |
           shopt -s nullglob
           files=(dist/*.dmg dist/*.dmg.blockmap dist/*-mac.zip dist/*-mac.zip.blockmap dist/latest-mac.yml)
-          gh release upload "${{ github.event.release.tag_name }}" "${files[@]}" --clobber
+          gh release upload "${{ github.ref_name }}" "${files[@]}" --clobber
 
   build-windows:
     runs-on: windows-latest
@@ -65,7 +67,7 @@ jobs:
       - name: Sync package.json version to release tag
         shell: bash
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"; VERSION="${VERSION#.}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
@@ -82,4 +84,4 @@ jobs:
         run: |
           shopt -s nullglob
           files=(dist/*.exe dist/*.exe.blockmap dist/latest.yml)
-          gh release upload "${{ github.event.release.tag_name }}" "${files[@]}" --clobber
+          gh release upload "${{ github.ref_name }}" "${files[@]}" --clobber
