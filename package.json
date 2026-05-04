@@ -60,6 +60,7 @@
   "build": {
     "appId": "com.api-client.app",
     "productName": "API Client",
+    "artifactName": "${name}-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
