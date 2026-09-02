@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e2e"/>
+      <stop offset="100%" stop-color="#11111b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#89b4fa"/>
+      <stop offset="100%" stop-color="#74c7ec"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="1024" height="1024" rx="220" ry="220" fill="url(#bg)"/>
+
+  <!-- Subtle border -->
+  <rect x="8" y="8" width="1008" height="1008" rx="216" ry="216" fill="none" stroke="#313244" stroke-width="4"/>
+
+  <!-- Outgoing arrow (request) -->
+  <line x1="280" y1="420" x2="620" y2="420" stroke="url(#accent)" stroke-width="44" stroke-linecap="round"/>
+  <polyline points="540,340 640,420 540,500" fill="none" stroke="url(#accent)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Incoming arrow (response) -->
+  <line x1="744" y1="604" x2="404" y2="604" stroke="#a6e3a1" stroke-width="44" stroke-linecap="round"/>
+  <polyline points="484,524 384,604 484,684" fill="none" stroke="#a6e3a1" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
