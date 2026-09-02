@@ -4,7 +4,7 @@
 
 # API Client
 
-**A self-hosted, file-based API client — like Postman, but everything is stored as plain YAML files you own.**
+**A self-hosted, file-based API client — everything is stored as plain YAML files you own.**
 
 Git-friendly. Diff-friendly. No accounts, no cloud sync, no vendor lock-in.
 
@@ -22,7 +22,7 @@ Git-friendly. Diff-friendly. No accounts, no cloud sync, no vendor lock-in.
 
 ## What is it?
 
-API Client is a desktop and Docker app for building, sending, and testing HTTP requests — the everyday job of a tool like Postman or Insomnia. The difference is **where your data lives**: every collection, request, and environment is a human-readable **YAML file on your disk**, not locked inside a proprietary cloud account.
+API Client is a desktop and Docker app for building, sending, and testing HTTP requests. The difference from a typical API client is **where your data lives**: every collection, request, and environment is a human-readable **YAML file on your disk**, not locked inside a proprietary cloud account.
 
 That makes your API workspace behave like the rest of your codebase:
 
@@ -42,7 +42,7 @@ If you've ever wanted your API requests to live *next to* the code they test, th
 - **Variable substitution** — Use `{{variables}}` in URLs, headers, body, and auth fields
 - **Dynamic variables** — `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`, `{{$randomCompanyName}}`
 - **Scripts & tests** — Pre-request and post-response JavaScript with assertions via `bru.test()`
-- **Postman import** — Import Postman collections (v2.1) and environments, converted to native YAML
+- **Collection import** — Import existing collections and environments (v2.1 format), converted to native YAML
 - **OpenAPI import** — Import OpenAPI 3.x / Swagger 2.0 specs (JSON or YAML) from file or URL
 - **Live reload** — Edit a YAML file in your editor and the UI updates instantly (Server-Sent Events)
 - **Multi-tab interface** — Open requests in reorderable tabs, with duplicate / close-all / close-others actions
@@ -111,7 +111,7 @@ Configure auth at the request or collection level: **Basic**, **Bearer**, **API 
 
 ### 5. Bring in what you already have
 
-- **Postman** — import a v2.1 collection/environment export; it's converted to native YAML.
+- **Existing collections** — import a v2.1 collection/environment export; it's converted to native YAML.
 - **OpenAPI / Swagger** — import a 3.x or 2.0 spec (file or URL) to scaffold requests.
 
 ## Auto-updates
