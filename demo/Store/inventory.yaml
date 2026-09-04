@@ -1,0 +1,27 @@
+meta:
+  name: Get store inventory
+  description: >-
+    GET /store/inventory — returns a map of pet statuses to quantities. Uses the
+    collection's default api_key auth. Includes a mock response for offline use.
+  seq: 1
+request:
+  method: GET
+  url: "{{baseUrl}}/store/inventory"
+scripts:
+  post-response: |
+    const inventory = res.json() || {};
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.test("inventory is an object", () => {
+      ac.expect(typeof inventory === "object").toBeTruthy();
+    });
+    console.log("Available stock:", inventory.available);
+mocks:
+  - name: Inventory
+    isDefault: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        Content-Type: application/json
+      body: |
+        { "available": 42, "pending": 7, "sold": 15 }

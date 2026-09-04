@@ -1,0 +1,39 @@
+meta:
+  name: Petstore API
+  version: 1
+  description: >-
+    Swagger Petstore (OpenAPI v3) demo collection. Covers the Pet, Store and
+    User endpoints against the public server at https://petstore3.swagger.io.
+    Requests are chained: "Add a new pet" saves {{petId}}, "Place an order"
+    saves {{orderId}}, and "Login" saves {{sessionToken}} — so run them
+    top-to-bottom to see variables flow between requests.
+defaults:
+  baseUrl: "{{baseUrl}}"
+  headers:
+    Accept: application/json
+    Content-Type: application/json
+  auth:
+    type: apikey
+    key: api_key
+    value: "{{apiKey}}"
+    in: header
+variables:
+  petStatus: available
+  defaultCategory: Dogs
+scripts:
+  pre-request: |
+    // Runs before EVERY request in this collection.
+    // Give each run a short id and stamp the start time so the
+    // post-response script can measure how long the call took.
+    const runId = Math.random().toString(36).slice(2, 10);
+    ac.setVar("runId", runId);
+    ac.setVar("requestStartedAt", String(Date.now()));
+    console.log("[petstore] → request start (runId=" + runId + ")");
+  post-response: |
+    // Runs after EVERY response in this collection.
+    const started = Number(ac.getVar("requestStartedAt")) || Date.now();
+    console.log("[petstore] ← " + res.status + " in ~" + (Date.now() - started) + "ms");
+
+    ac.test("no server error (status < 500)", () => {
+      ac.expect(res.status < 500).toBeTruthy();
+    });

@@ -1,0 +1,11 @@
+meta:
+  name: Delete order
+  description: "DELETE /store/order/{orderId} — cancels the order from {{orderId}}."
+  seq: 4
+request:
+  method: DELETE
+  url: "{{baseUrl}}/store/order/{{orderId}}"
+scripts:
+  post-response: |
+    ac.test("delete succeeded (200)", () => ac.expect(res.status).toBe(200));
+    console.log("Cancelled order", ac.getVar("orderId"));

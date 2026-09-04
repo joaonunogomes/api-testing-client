@@ -1,0 +1,45 @@
+meta:
+  name: Login
+  description: >-
+    GET /user/login — authenticates with query params and captures the returned
+    session token into {{sessionToken}}, which "Get current user" then sends as
+    a Bearer token. The password is pulled from the environment's {{password}}
+    secret so it is never stored in the request file.
+  seq: 2
+request:
+  method: GET
+  url: "{{baseUrl}}/user/login"
+  auth:
+    type: none
+  params:
+    username: "{{username}}"
+    password: "{{password}}"
+scripts:
+  post-response: |
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+
+    // The petstore returns a message like:
+    // "logged in user session:1774907045". Pull the token out of it and,
+    // as a fallback, use the rate-limit header the API also sets.
+    const body = res.json();
+    let token = "";
+    if (body && typeof body.message === "string") {
+      const m = body.message.match(/session:(\S+)/);
+      if (m) token = m[1];
+    }
+    if (!token) token = res.headers["x-expires-after"] || "demo-session-token";
+
+    ac.setVar("sessionToken", token);
+    console.log("Logged in — sessionToken saved");
+mocks:
+  - name: Logged in
+    isDefault: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        Content-Type: application/json
+        X-Rate-Limit: "5000"
+        X-Expires-After: "2026-09-05T11:00:00.000Z"
+      body: |
+        { "code": 200, "type": "unknown", "message": "logged in user session:1788550000" }

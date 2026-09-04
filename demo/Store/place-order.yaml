@@ -1,0 +1,46 @@
+meta:
+  name: Place an order
+  description: >-
+    POST /store/order — orders the pet from {{petId}}. Quantity comes from the
+    per-environment {{orderQuantity}} variable. Saves the new {{orderId}}.
+    Ships with a mock response for offline use.
+  seq: 2
+request:
+  method: POST
+  url: "{{baseUrl}}/store/order"
+  body:
+    type: json
+    content: |
+      {
+        "petId": {{petId}},
+        "quantity": {{orderQuantity}},
+        "shipDate": "{{generate 'isoTimestamp'}}",
+        "status": "placed",
+        "complete": false
+      }
+scripts:
+  post-response: |
+    const order = res.json();
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.test("order has an id", () => ac.expect(order && order.id).toBeDefined());
+    if (order && order.id) {
+      ac.setVar("orderId", String(order.id));
+      console.log("Placed order", order.id, "for pet", order.petId);
+    }
+mocks:
+  - name: Order placed
+    isDefault: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        Content-Type: application/json
+      body: |
+        {
+          "id": 5001,
+          "petId": 101,
+          "quantity": 2,
+          "shipDate": "2026-09-05T10:00:00.000Z",
+          "status": "placed",
+          "complete": false
+        }

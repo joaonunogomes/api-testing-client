@@ -1,0 +1,21 @@
+meta:
+  name: Get current user
+  description: >-
+    GET /user/{username} — fetches the logged-in account. Overrides the
+    collection auth with a Bearer token read from {{sessionToken}} (set by
+    "Login").
+  seq: 3
+request:
+  method: GET
+  url: "{{baseUrl}}/user/{{username}}"
+  auth:
+    type: bearer
+    token: "{{sessionToken}}"
+scripts:
+  post-response: |
+    const user = res.json();
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.test("username matches {{username}}", () => {
+      ac.expect(user.username).toBe(ac.getVar("username"));
+    });
+    console.log("Fetched user:", user.username, "(" + user.email + ")");

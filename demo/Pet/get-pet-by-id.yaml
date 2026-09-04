@@ -1,0 +1,18 @@
+meta:
+  name: Get pet by ID
+  description: GET /pet/{petId} — fetches the pet created by "Add a new pet" using the saved {{petId}} variable.
+  seq: 2
+request:
+  method: GET
+  url: "{{baseUrl}}/pet/{{petId}}"
+scripts:
+  post-response: |
+    const pet = res.json();
+
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.test("returned id matches {{petId}}", () => {
+      ac.expect(String(pet.id)).toBe(ac.getVar("petId"));
+    });
+    ac.test("has a status field", () => ac.expect(pet.status).toBeDefined());
+
+    console.log("Pet '" + pet.name + "' is currently:", pet.status);

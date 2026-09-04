@@ -1,0 +1,36 @@
+meta:
+  name: Update an existing pet
+  description: >-
+    PUT /pet — marks the pet from {{petId}} as sold. This request overrides the
+    collection's API-key auth with OAuth2 (client-credentials) to show how a
+    single request can use a different auth scheme. Set {{oauthToken}} in an
+    environment to skip the interactive flow.
+  seq: 4
+request:
+  method: PUT
+  url: "{{baseUrl}}/pet"
+  auth:
+    type: oauth2
+    grantType: client_credentials
+    tokenUrl: https://petstore3.swagger.io/oauth/token
+    clientId: "{{oauthClientId}}"
+    clientSecret: "{{oauthClientSecret}}"
+    scope: "write:pets read:pets"
+    tokenVariable: oauthToken
+  body:
+    type: json
+    content: |
+      {
+        "id": {{petId}},
+        "name": "{{petName}}",
+        "category": { "id": 1, "name": "{{defaultCategory}}" },
+        "photoUrls": ["https://placedog.net/500/500"],
+        "tags": [{ "id": 10, "name": "demo" }],
+        "status": "sold"
+      }
+scripts:
+  post-response: |
+    const pet = res.json();
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.test("pet is now sold", () => ac.expect(pet.status).toBe("sold"));
+    console.log("Pet", pet.id, "updated to status:", pet.status);

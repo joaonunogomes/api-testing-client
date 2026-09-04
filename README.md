@@ -30,6 +30,7 @@ If you've ever wanted your API requests to live *next to* the code they test, th
 ## Features
 
 - **File-based storage** — Collections, requests, and environments are YAML files on disk
+- **Sync to any folder** — Link a collection or environment to any folder on your computer (e.g. inside a git repo) so it lives right next to the code it tests
 - **Git-friendly** — Human-readable diffs, a branch per feature, PR reviews for API changes
 - **Environments** — Switch between dev/staging/prod with variable substitution (`{{baseUrl}}`), each with an optional color to keep them visually distinct
 - **Authentication** — Basic, Bearer, API Key, and OAuth 2.0 (Authorization Code, PKCE, Client Credentials, Password, Refresh Token)
@@ -87,21 +88,31 @@ my-workspace/
 
 <div align="center"><img src="assets/screenshots/workspace.png" alt="Workspace collections sidebar" width="320" /></div>
 
-### 2. Send your first request
+### 2. Sync collections & environments to your own folders
+
+You don't have to keep everything inside the app's workspace. **Link** any collection or environment to a folder anywhere on your computer — most usefully, a folder inside a git repo — and the YAML is written and kept in sync there. This puts your API requests under **version control** right *next to* the code they test: commit them, branch them, and review API changes in the same PR as the feature.
+
+- The linked collection/environment is written as plain YAML into the folder you choose, then kept in sync as you edit it in the app.
+- Because it's just files in your repo, teammates who clone the repo get the same collections and environments — no export/import step.
+- **Secrets stay out of git.** When you link an environment, secret variables are saved as empty strings in its `.env.yaml`, so you can commit the environment's shape without leaking tokens or passwords. Fill the real values in locally.
+
+<div align="center"><img src="assets/screenshots/version-control.gif" alt="Linking a collection to a git repo folder for version control" width="820" /></div>
+
+### 3. Send your first request
 
 Create a request, pick a method, type a URL, and hit **Send**. Use `{{variables}}` anywhere (URL, headers, body, auth) and they'll resolve from the active environment.
 
 <div align="center"><img src="assets/screenshots/request.png" alt="Sending a request and viewing the response" width="820" /></div>
 
-### 3. Set up environments
+### 4. Set up environments
 
 Define an environment per target (e.g. `dev`, `prod`) with variables like `baseUrl` and `token`. Switch the active environment from the header dropdown; a per-environment color keeps prod visually distinct so you don't fire a test at the wrong place.
 
-### 4. Authentication
+### 5. Authentication
 
 Configure auth at the request or collection level: **Basic**, **Bearer**, **API Key**, or **OAuth 2.0** (Authorization Code, PKCE, Client Credentials, Password, and Refresh Token flows). OAuth tokens are fetched and cached for you, with a Token Status panel showing the active token, type, and expiry.
 
-### 5. Bring in what you already have
+### 6. Bring in what you already have
 
 - **Existing collections** — import a v2.1 collection/environment export; it's converted to native YAML.
 - **OpenAPI / Swagger** — import a 3.x or 2.0 spec (file or URL) to scaffold requests.

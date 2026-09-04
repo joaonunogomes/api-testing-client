@@ -1,0 +1,39 @@
+meta:
+  name: Find pets by status
+  description: GET /pet/findByStatus — lists pets filtered by status. Demonstrates query params ({{petStatus}} comes from collection variables) and saves the first result into {{firstPetId}}.
+  seq: 3
+request:
+  method: GET
+  url: "{{baseUrl}}/pet/findByStatus"
+  params:
+    status: "{{petStatus}}"
+scripts:
+  post-response: |
+    const pets = res.json() || [];
+
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.test("response is a list", () => ac.expect(Array.isArray(pets)).toBeTruthy());
+
+    console.log("Found " + pets.length + " '" + ac.getVar("petStatus") + "' pets");
+    if (pets.length > 0) {
+      ac.setVar("firstPetId", String(pets[0].id));
+      console.log("First pet id =", pets[0].id);
+    }
+mocks:
+  - name: 200 Response
+    isDefault: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        access-control-allow-origin: "*"
+        connection: keep-alive
+        content-type: application/json
+        date: Fri, 04 Sep 2026 19:13:04 GMT
+        keep-alive: timeout=5
+        transfer-encoding: chunked
+      body: |
+        [
+          { "id": 101, "name": "Rex-101", "status": "available" },
+          { "id": 102, "name": "Bella-102", "status": "available" }
+        ]

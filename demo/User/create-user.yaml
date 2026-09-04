@@ -1,0 +1,37 @@
+meta:
+  name: Create user
+  description: >-
+    POST /user — registers the account used by "Login". Username comes from the
+    environment ({{username}}); the password is the {{password}} secret.
+    Includes a mock response for offline use.
+  seq: 1
+request:
+  method: POST
+  url: "{{baseUrl}}/user"
+  body:
+    type: json
+    content: |
+      {
+        "id": {{generate 'randomInt'}},
+        "username": "{{username}}",
+        "firstName": "Demo",
+        "lastName": "User",
+        "email": "{{generate 'email'}}",
+        "password": "{{password}}",
+        "phone": "{{generate 'phone'}}",
+        "userStatus": 1
+      }
+scripts:
+  post-response: |
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    console.log("Created user:", ac.getVar("username"));
+mocks:
+  - name: User created
+    isDefault: true
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        Content-Type: application/json
+      body: |
+        { "code": 200, "type": "unknown", "message": "9223372016900000000" }

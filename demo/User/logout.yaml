@@ -1,0 +1,14 @@
+meta:
+  name: Logout
+  description: "GET /user/logout — ends the current session and clears {{sessionToken}}."
+  seq: 5
+request:
+  method: GET
+  url: "{{baseUrl}}/user/logout"
+  auth:
+    type: none
+scripts:
+  post-response: |
+    ac.test("status is 200", () => ac.expect(res.status).toBe(200));
+    ac.setVar("sessionToken", "");
+    console.log("Logged out — sessionToken cleared");
