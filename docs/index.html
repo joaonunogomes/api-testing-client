@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>API Client — the API client where every request is a file you own</title>
+<meta name="description" content="A self-hosted, file-based API client. Every collection, request, and environment is plain YAML on your disk — version-controlled, diffable, and private by default." />
+<link rel="icon" type="image/png" href="assets/icon.png" />
+
+<!-- Open Graph -->
+<meta property="og:title" content="API Client — requests stored as files you own" />
+<meta property="og:description" content="Build, send, and test HTTP requests. Everything lives as plain YAML on your disk: commit it, branch it, review it in a PR." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/icon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<!--
+  Design notes (Catppuccin Mocha — grounded in the app's own icon, not a default).
+  Boldness is spent in ONE place: the hero "file <-> response" panel, which literally
+  shows a request as a YAML file (blue, outgoing) beside its JSON response (green, incoming),
+  echoing the two-arrow logo. Everything else stays quiet. Second concrete proof point:
+  a real git diff in the "files" section, proving "diffable" instead of claiming it.
+  Single dark look, committed deliberately to match the product identity.
+-->
+<style>
+  :root{
+    --crust:#11111b;
+    --base:#1e1e2e;
+    --mantle:#181825;
+    --surface:#262637;
+    --surface2:#313244;
+    --overlay:#45475a;
+    --text:#cdd6f4;
+    --subtext:#9399b2;
+    --muted:#6c7086;
+    --blue:#89b4fa;
+    --sky:#74c7ec;
+    --green:#a6e3a1;
+    --peach:#fab387;
+    --yellow:#f9e2af;
+    --red:#f38ba8;
+    --mauve:#cba6f7;
+    --maxw:1140px;
+    --radius:14px;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+  body{
+    margin:0;
+    background:var(--base);
+    color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,sans-serif;
+    font-size:17px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    /* soft glow anchored where the request leaves and the response returns */
+    background-image:
+      radial-gradient(720px 420px at 82% -8%, rgba(137,180,250,.10), transparent 60%),
+      radial-gradient(680px 400px at 8% 6%, rgba(166,227,161,.06), transparent 60%);
+    background-attachment:fixed;
+  }
+
+  h1,h2,h3{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;line-height:1.05;letter-spacing:-.02em;margin:0}
+  a{color:inherit;text-decoration:none}
+  p{margin:0}
+  code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+
+  :focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:4px}
+
+  /* ---------- nav ---------- */
+  header.nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);
+    background:rgba(17,17,27,.72);border-bottom:1px solid rgba(69,71,90,.4)}
+  .nav-inner{display:flex;align-items:center;gap:20px;height:66px}
+  .brand{display:flex;align-items:center;gap:11px;font-family:"Bricolage Grotesque";font-weight:600;font-size:18px;letter-spacing:-.01em}
+  .brand img{width:30px;height:30px;border-radius:8px;display:block}
+  .nav-links{display:flex;gap:26px;margin-left:14px}
+  .nav-links a{color:var(--subtext);font-size:15px;font-weight:500;transition:color .15s}
+  .nav-links a:hover{color:var(--text)}
+  .nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+
+  .btn{display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:15px;
+    padding:10px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:transform .12s,background .15s,border-color .15s;white-space:nowrap}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--blue);color:#0b1220;box-shadow:0 1px 0 rgba(255,255,255,.25) inset}
+  .btn-primary:hover{background:#9cc0fb}
+  .btn-ghost{color:var(--text);border-color:var(--surface2);background:rgba(49,50,68,.35)}
+  .btn-ghost:hover{border-color:var(--overlay);background:rgba(49,50,68,.6)}
+  .icon{width:18px;height:18px;display:block}
+
+  /* ---------- hero ---------- */
+  .hero{padding:82px 0 40px}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1.15fr);gap:56px;align-items:center}
+  .badge{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;color:var(--subtext);
+    background:rgba(49,50,68,.4);border:1px solid var(--surface2);border-radius:999px;padding:6px 13px;margin-bottom:26px}
+  .badge b{color:var(--green);font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  h1.title{font-size:clamp(38px,5.2vw,60px);font-weight:700;max-width:15ch}
+  h1.title .out{color:var(--blue)}
+  h1.title .in{color:var(--green)}
+  .lede{margin-top:24px;font-size:19px;color:var(--subtext);max-width:46ch}
+  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+  .cta-sub{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .cta-sub .plat{color:var(--subtext)}
+
+  /* ---------- hero panel: file <-> response ---------- */
+  .panel{
+    background:linear-gradient(180deg,var(--mantle),#13131d);
+    border:1px solid var(--surface2);
+    border-radius:16px;
+    box-shadow:0 30px 70px -30px rgba(0,0,0,.75), 0 0 0 1px rgba(137,180,250,.05);
+    overflow:hidden;
+  }
+  .panel-bar{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--surface2);background:rgba(17,17,27,.5)}
+  .lamp{width:11px;height:11px;border-radius:50%}
+  .lamp.r{background:#f38ba8}.lamp.y{background:#f9e2af}.lamp.g{background:#a6e3a1}
+  .panel-bar .fname{margin-left:8px;font-family:"JetBrains Mono";font-size:12.5px;color:var(--muted)}
+  .panel-bar .send{margin-left:auto;font-family:"JetBrains Mono";font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px}
+
+  .split{display:grid;grid-template-columns:1fr auto 1fr}
+  .col{padding:18px 18px 20px;min-width:0}
+  .col-req{background:rgba(137,180,250,.03)}
+  .col-res{background:rgba(166,227,161,.03)}
+  .col-head{font-family:"JetBrains Mono";font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .col-head .tag{color:var(--blue)}
+  .col-res .col-head .tag{color:var(--green)}
+
+  .arrows{display:flex;flex-direction:column;justify-content:center;gap:22px;padding:0 4px;border-left:1px solid var(--surface2);border-right:1px solid var(--surface2);background:rgba(17,17,27,.35)}
+  .arrows svg{width:34px;height:20px;display:block}
+
+  pre.code{margin:0;font-size:13px;line-height:1.72;white-space:pre;overflow-x:auto;color:var(--text)}
+  pre.code::-webkit-scrollbar{height:7px}
+  pre.code::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:8px}
+  .k{color:var(--blue)}      /* yaml key */
+  .s{color:var(--green)}     /* string */
+  .n{color:var(--peach)}     /* number */
+  .v{color:var(--mauve)}     /* variable {{ }} */
+  .c{color:var(--muted);font-style:italic} /* comment */
+  .m-get{color:var(--green);font-weight:600}
+  .punct{color:var(--subtext)}
+  .jkey{color:var(--sky)}
+  .status-ok{color:var(--green);font-weight:600}
+
+  /* ---------- section scaffolding ---------- */
+  section{padding:88px 0}
+  .sec-lead{max-width:60ch}
+  .kicker{font-family:"JetBrains Mono";font-size:13px;color:var(--sky);margin-bottom:16px}
+  h2.sec{font-size:clamp(28px,3.6vw,40px);font-weight:600}
+  .sec-lead p{margin-top:18px;font-size:18px;color:var(--subtext)}
+
+  /* ---------- files / diff section ---------- */
+  .files-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center;margin-top:48px}
+  .why-list{display:flex;flex-direction:column;gap:4px}
+  .why{display:grid;grid-template-columns:34px 1fr;gap:16px;padding:18px 0;border-top:1px solid var(--surface2)}
+  .why:last-child{border-bottom:1px solid var(--surface2)}
+  .why svg{width:22px;height:22px;color:var(--blue);margin-top:3px}
+  .why h3{font-size:18px;font-family:"Inter";font-weight:600;letter-spacing:0}
+  .why p{margin-top:5px;color:var(--subtext);font-size:15.5px}
+
+  .diff{background:#13131d;border:1px solid var(--surface2);border-radius:14px;overflow:hidden;box-shadow:0 24px 50px -28px rgba(0,0,0,.8)}
+  .diff-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--surface2);font-family:"JetBrains Mono";font-size:12.5px;color:var(--subtext)}
+  .diff-bar .branch{color:var(--mauve)}
+  .diff pre{margin:0;padding:16px 18px;font-family:"JetBrains Mono";font-size:13px;line-height:1.75;overflow-x:auto}
+  .diff .add{color:var(--green);background:rgba(166,227,161,.08);display:block}
+  .diff .del{color:var(--red);background:rgba(243,139,168,.08);display:block}
+  .diff .ctx{color:var(--muted);display:block}
+  .diff .hunk{color:var(--sky);display:block}
+
+  /* ---------- features ---------- */
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:52px;background:var(--surface2);border:1px solid var(--surface2);border-radius:16px;overflow:hidden}
+  .feat{background:var(--base);padding:28px 26px 30px;display:flex;flex-direction:column;gap:12px;transition:background .18s}
+  .feat:hover{background:var(--mantle)}
+  .feat .fi{width:26px;height:26px;color:var(--blue)}
+  .feat h3{font-family:"Inter";font-weight:600;font-size:17.5px;letter-spacing:0}
+  .feat p{color:var(--subtext);font-size:15px}
+  .feat .kbd{font-family:"JetBrains Mono";font-size:13px;color:var(--peach)}
+
+  /* ---------- showcase ---------- */
+  .shot{margin-top:44px;border:1px solid var(--surface2);border-radius:16px;overflow:hidden;background:var(--mantle);box-shadow:0 30px 70px -34px rgba(0,0,0,.8)}
+  .shot img{width:100%;display:block}
+  .shot-cap{padding:14px 18px;font-size:14px;color:var(--muted);border-top:1px solid var(--surface2);font-family:"JetBrains Mono"}
+  .shot-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}
+  @media (max-width:760px){.shot-row{grid-template-columns:1fr}}
+  .shot-row .shot{margin-top:0}
+
+  /* ---------- install ---------- */
+  .install{background:var(--mantle);border-top:1px solid var(--surface2);border-bottom:1px solid var(--surface2)}
+  .install-grid{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:48px}
+  .card{background:var(--base);border:1px solid var(--surface2);border-radius:16px;padding:28px}
+  .card h3{font-family:"Inter";font-size:19px;font-weight:600;letter-spacing:0;display:flex;align-items:center;gap:10px}
+  .card h3 svg{width:22px;height:22px;color:var(--blue)}
+  table.plat{width:100%;border-collapse:collapse;margin-top:18px;font-size:14.5px}
+  table.plat td{padding:11px 0;border-top:1px solid var(--surface2);color:var(--subtext)}
+  table.plat td:first-child{color:var(--text);font-weight:500}
+  table.plat td:last-child{text-align:right;font-family:"JetBrains Mono";font-size:13px;color:var(--muted)}
+  .term{margin-top:18px;background:#13131d;border:1px solid var(--surface2);border-radius:12px;overflow:hidden}
+  .term-bar{display:flex;gap:7px;padding:11px 14px;border-bottom:1px solid var(--surface2)}
+  .term pre{margin:0;padding:16px 18px;font-family:"JetBrains Mono";font-size:13px;line-height:1.7;overflow-x:auto;color:var(--text)}
+  .term .prompt{color:var(--green)}
+  .term .flag{color:var(--peach)}
+  .term .cmt{color:var(--muted)}
+  .term .url{color:var(--sky)}
+  .copy{display:inline-flex;align-items:center;gap:8px;margin-top:14px;font-family:"JetBrains Mono";font-size:13px;color:var(--subtext);background:none;border:1px solid var(--surface2);border-radius:8px;padding:8px 12px;cursor:pointer;transition:border-color .15s,color .15s}
+  .copy:hover{border-color:var(--overlay);color:var(--text)}
+
+  .open-url{margin-top:22px;font-size:15px;color:var(--subtext)}
+  .open-url code{color:var(--sky);background:rgba(116,199,236,.08);padding:2px 8px;border-radius:6px}
+
+  /* ---------- final cta ---------- */
+  .final{text-align:center;padding:100px 0}
+  .final h2{font-size:clamp(30px,4.4vw,48px);font-weight:700;max-width:18ch;margin:0 auto}
+  .final p{margin:20px auto 0;color:var(--subtext);font-size:19px;max-width:48ch}
+  .final .cta-row{justify-content:center;margin-top:36px}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--surface2);padding:40px 0;background:var(--crust)}
+  .foot-inner{display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:14px}
+  .foot-inner .brand{font-size:16px}
+  .foot-links{margin-left:auto;display:flex;gap:22px}
+  .foot-links a{color:var(--subtext)}
+  .foot-links a:hover{color:var(--text)}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:940px){
+    .hero-grid{grid-template-columns:1fr;gap:44px}
+    .files-grid{grid-template-columns:1fr;gap:32px}
+    .install-grid{grid-template-columns:1fr}
+    .feat-grid{grid-template-columns:1fr 1fr}
+    .nav-links{display:none}
+  }
+  @media (max-width:640px){
+    body{font-size:16px}
+    .hero{padding:52px 0 24px}
+    section{padding:64px 0}
+    .feat-grid{grid-template-columns:1fr}
+    .split{grid-template-columns:1fr;}
+    .arrows{flex-direction:row;justify-content:center;border-left:none;border-right:none;border-top:1px solid var(--surface2);border-bottom:1px solid var(--surface2);padding:10px}
+    .arrows svg{transform:rotate(90deg)}
+    .foot-links{margin-left:0;flex-basis:100%}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" /> API Client</a>
+    <nav class="nav-links">
+      <a href="#files">Files</a>
+      <a href="#features">Features</a>
+      <a href="#screens">In use</a>
+      <a href="#install">Install</a>
+    </nav>
+    <div class="nav-right">
+      <a class="btn btn-ghost" href="https://github.com/joaonunogomes/api-testing-client" target="_blank" rel="noopener">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.22-3.37-1.22-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.05 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.32 9.32 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.92-2.34 4.78-4.57 5.03.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.03 10.03 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+        GitHub
+      </a>
+      <a class="btn btn-primary" href="https://github.com/joaonunogomes/api-testing-client/releases" target="_blank" rel="noopener">Download</a>
+    </div>
+  </div>
+</header>
+
+<a id="top"></a>
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="badge"><span class="dot"></span> No account · <b>no cloud</b> · no telemetry</span>
+      <h1 class="title">The API client where every request is a <span class="out">file</span> you <span class="in">own</span>.</h1>
+      <p class="lede">Build, send, and test HTTP requests. Every collection, request, and environment is plain YAML on your disk — so your API workspace lives right next to the code it tests.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/joaonunogomes/api-testing-client/releases" target="_blank" rel="noopener">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+          Download the app
+        </a>
+        <a class="btn btn-ghost" href="#install">
+          <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.98 11.08h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19h-2.12a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.95 0h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19h-2.12a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.9 0h2.11a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19H8.13a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.95 0h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19H5.18a.19.19 0 0 0-.19.19v1.88c0 .1.09.19.19.19m2.95-2.73h2.11a.19.19 0 0 0 .19-.19V6.28a.19.19 0 0 0-.19-.19H8.13a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m2.95 0h2.12a.19.19 0 0 0 .19-.19V6.28a.19.19 0 0 0-.19-.19h-2.12a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m8.62 1.36c-.06-.05-.67-.51-1.96-.51-.34 0-.68.03-1.02.09-.25-1.72-1.67-2.56-1.74-2.6l-.35-.2-.22.33c-.29.44-.5.94-.62 1.45-.23.98-.09 1.9.41 2.69-.6.34-1.57.42-1.77.43H1.79a.75.75 0 0 0-.75.75c-.03 1.27.18 2.53.63 3.72.5 1.28 1.25 2.22 2.22 2.8 1.09.64 2.86 1.01 4.86 1.01.9 0 1.8-.08 2.69-.24a11.1 11.1 0 0 0 3.51-1.28 9.7 9.7 0 0 0 2.4-1.96c1.14-1.29 1.82-2.73 2.32-4.01h.2c1.38 0 2.23-.55 2.7-1.02.31-.29.55-.65.7-1.05l.1-.29z"/></svg>
+          Run with Docker
+        </a>
+      </div>
+      <p class="cta-sub"><span class="plat">macOS · Windows · Docker</span> — MIT licensed, free forever.</p>
+    </div>
+
+    <!-- Boldness spend: the request-file / response panel -->
+    <div class="panel" aria-label="A request stored as a YAML file, and the JSON response it returns">
+      <div class="panel-bar">
+        <span class="lamp r"></span><span class="lamp y"></span><span class="lamp g"></span>
+        <span class="fname">collections/Petstore/Pet/find-by-status.yaml</span>
+        <span class="send"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="m3 3 18 9-18 9 4-9-4-9Z"/></svg> Send</span>
+      </div>
+      <div class="split">
+        <div class="col col-req">
+          <div class="col-head"><span class="tag">◤ request</span> · yaml on disk</div>
+<pre class="code"><span class="k">meta</span><span class="punct">:</span>
+  <span class="k">name</span><span class="punct">:</span> <span class="s">Find pets by status</span>
+<span class="k">request</span><span class="punct">:</span>
+  <span class="k">method</span><span class="punct">:</span> <span class="m-get">GET</span>
+  <span class="k">url</span><span class="punct">:</span> <span class="s">"<span class="v">{{baseUrl}}</span>/pet/findByStatus"</span>
+  <span class="k">params</span><span class="punct">:</span>
+    <span class="k">status</span><span class="punct">:</span> <span class="s">"<span class="v">{{petStatus}}</span>"</span>
+<span class="k">scripts</span><span class="punct">:</span>
+  <span class="k">post-response</span><span class="punct">:</span> <span class="punct">|</span>
+    <span class="k">ac</span>.test(<span class="s">"status is 200"</span>,
+      () =&gt; ac.expect(res.status)
+              .toBe(<span class="n">200</span>));</pre>
+        </div>
+
+        <div class="arrows" aria-hidden="true">
+          <svg viewBox="0 0 40 24" fill="none"><path d="M4 12h26" stroke="#89b4fa" stroke-width="3.4" stroke-linecap="round"/><path d="M26 5l8 7-8 7" stroke="#89b4fa" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 40 24" fill="none"><path d="M36 12H10" stroke="#a6e3a1" stroke-width="3.4" stroke-linecap="round"/><path d="M14 5l-8 7 8 7" stroke="#a6e3a1" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+
+        <div class="col col-res">
+          <div class="col-head"><span class="tag">response ◢</span> · <span class="status-ok">200 OK</span> · 84ms</div>
+<pre class="code"><span class="punct">[</span>
+  <span class="punct">{</span>
+    <span class="jkey">"id"</span><span class="punct">:</span> <span class="n">101</span><span class="punct">,</span>
+    <span class="jkey">"name"</span><span class="punct">:</span> <span class="s">"Rex-101"</span><span class="punct">,</span>
+    <span class="jkey">"status"</span><span class="punct">:</span> <span class="s">"available"</span>
+  <span class="punct">}</span><span class="punct">,</span>
+  <span class="punct">{</span>
+    <span class="jkey">"id"</span><span class="punct">:</span> <span class="n">102</span><span class="punct">,</span>
+    <span class="jkey">"name"</span><span class="punct">:</span> <span class="s">"Bella-102"</span><span class="punct">,</span>
+    <span class="jkey">"status"</span><span class="punct">:</span> <span class="s">"available"</span>
+  <span class="punct">}</span>
+<span class="punct">]</span>
+<span class="c">✓ status is 200</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FILES ================= -->
+<section id="files">
+  <div class="wrap">
+    <div class="sec-lead">
+      <div class="kicker">// the filesystem is the source of truth</div>
+      <h2 class="sec">Your API workspace behaves like the rest of your codebase.</h2>
+      <p>Most API clients lock your work inside a proprietary cloud account. Here, a changed header is a one-line diff you can review in a pull request — not an opaque blob you hope synced correctly.</p>
+    </div>
+
+    <div class="files-grid">
+      <div class="why-list">
+        <div class="why">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="21"/></svg>
+          <div><h3>Version-controlled</h3><p>Commit it, branch it, and review API changes in the same PR as the feature they test.</p></div>
+        </div>
+        <div class="why">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <div><h3>Portable</h3><p>It's just files. Back your workspace up by pushing it to git — there's nothing else to export.</p></div>
+        </div>
+        <div class="why">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <div><h3>Private by default</h3><p>Nothing leaves your machine. No account, no cloud sync, no telemetry. Secrets stay out of git.</p></div>
+        </div>
+        <div class="why">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <div><h3>Diffable</h3><p>Human-readable YAML means every edit shows up as a clean, reviewable line — like the one on the right.</p></div>
+        </div>
+      </div>
+
+      <!-- concrete proof of "diffable" -->
+      <div class="diff" aria-label="A git diff of a request file">
+        <div class="diff-bar">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/><path d="M18 9V6"/></svg>
+          git diff · <span class="branch">feature/xml-support</span>
+        </div>
+<pre><span class="hunk">@@ collections/Petstore/Pet/find-by-status.yaml @@</span>
+<span class="ctx">   request:</span>
+<span class="ctx">     method: GET</span>
+<span class="ctx">     headers:</span>
+<span class="del">-      Accept: application/json</span>
+<span class="add">+      Accept: application/xml</span>
+<span class="ctx">     params:</span>
+<span class="del">-      status: available</span>
+<span class="add">+      status: pending</span>
+<span class="ctx">   </span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FEATURES ================= -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-lead">
+      <div class="kicker">// everything you'd reach for</div>
+      <h2 class="sec">A full API client — it just happens to save as text.</h2>
+    </div>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2Z"/></svg>
+        <h3>Sync to any folder</h3>
+        <p>Link a collection or environment to a folder inside a git repo, and its YAML is kept in sync right there.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+        <h3>Environments</h3>
+        <p>Switch dev / staging / prod with <span class="kbd">{{variable}}</span> substitution. A per-environment color keeps prod distinct.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <h3>Auth, done for you</h3>
+        <p>Basic, Bearer, API Key, and full OAuth 2.0 — tokens are fetched, cached, and their expiry shown.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <h3>Scripts &amp; tests</h3>
+        <p>Pre-request and post-response JavaScript with assertions via <span class="kbd">ac.test()</span> and dynamic <span class="kbd">{{$guid}}</span> variables.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+        <h3>Import what you have</h3>
+        <p>Bring in v2.1 collection exports or OpenAPI 3.x / Swagger 2.0 specs — converted to native YAML.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <h3>Mock server</h3>
+        <p>Spin up a mock HTTP server from any collection and serve its defined responses on localhost.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>
+        <h3>Live reload</h3>
+        <p>Edit a YAML file in your own editor and the UI updates instantly over Server-Sent Events.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m6 8 4 4-4 4M12 16h6"/></svg>
+        <h3>cURL, instantly</h3>
+        <p>Turn any request into a ready-to-run cURL command to paste into a terminal or a ticket.</p>
+      </div>
+      <div class="feat">
+        <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 6v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M9 11v5M15 11v5"/></svg>
+        <h3>No database</h3>
+        <p>There's nothing to migrate or corrupt. The filesystem is the store, and text is the format.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SCREENS ================= -->
+<section id="screens">
+  <div class="wrap">
+    <div class="sec-lead">
+      <div class="kicker">// in use</div>
+      <h2 class="sec">Send a request. Watch the file change on disk.</h2>
+    </div>
+
+    <div class="shot">
+      <img src="assets/screenshots/demo.gif" alt="Building and sending a request in API Client, with the response shown alongside" loading="lazy" />
+      <div class="shot-cap">Pick a method, type a URL, hit Send — variables resolve from the active environment.</div>
+    </div>
+
+    <div class="shot-row">
+      <div class="shot">
+        <img src="assets/screenshots/version-control.gif" alt="Linking a collection to a git repo folder so requests are version-controlled" loading="lazy" />
+        <div class="shot-cap">Link a collection to a git repo folder — requests land under version control.</div>
+      </div>
+      <div class="shot">
+        <img src="assets/screenshots/request.png" alt="A request and its response side by side" loading="lazy" />
+        <div class="shot-cap">Request on the left, response on the right — with tests, headers, and timing.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INSTALL ================= -->
+<section id="install" class="install">
+  <div class="wrap">
+    <div class="sec-lead">
+      <div class="kicker">// two ways to run it</div>
+      <h2 class="sec">Install in a minute.</h2>
+      <p>A self-updating desktop app, or a multi-arch Docker image that mounts your own workspace folder.</p>
+    </div>
+
+    <div class="install-grid">
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Desktop app
+        </h3>
+        <table class="plat">
+          <tr><td>macOS · Apple Silicon</td><td>.dmg · .zip</td></tr>
+          <tr><td>macOS · Intel</td><td>.dmg · .zip</td></tr>
+          <tr><td>Windows</td><td>installer · portable</td></tr>
+        </table>
+        <a class="btn btn-primary" style="margin-top:22px" href="https://github.com/joaonunogomes/api-testing-client/releases" target="_blank" rel="noopener">Get the latest release</a>
+        <p style="margin-top:14px;font-size:13.5px;color:var(--muted)">Keeps itself up to date — checks for new releases on startup.</p>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.98 11.08h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19h-2.12a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.95 0h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19h-2.12a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.9 0h2.11a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19H8.13a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.95 0h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19H5.18a.19.19 0 0 0-.19.19v1.88c0 .1.09.19.19.19m2.95-2.73h2.11a.19.19 0 0 0 .19-.19V6.28a.19.19 0 0 0-.19-.19H8.13a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m2.95 0h2.12a.19.19 0 0 0 .19-.19V6.28a.19.19 0 0 0-.19-.19h-2.12a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m8.62 1.36c-.06-.05-.67-.51-1.96-.51-.34 0-.68.03-1.02.09-.25-1.72-1.67-2.56-1.74-2.6l-.35-.2-.22.33c-.29.44-.5.94-.62 1.45-.23.98-.09 1.9.41 2.69-.6.34-1.57.42-1.77.43H1.79a.75.75 0 0 0-.75.75c-.03 1.27.18 2.53.63 3.72.5 1.28 1.25 2.22 2.22 2.8 1.09.64 2.86 1.01 4.86 1.01.9 0 1.8-.08 2.69-.24a11.1 11.1 0 0 0 3.51-1.28 9.7 9.7 0 0 0 2.4-1.96c1.14-1.29 1.82-2.73 2.32-4.01h.2c1.38 0 2.23-.55 2.7-1.02.31-.29.55-.65.7-1.05l.1-.29z"/></svg>
+          Docker
+        </h3>
+        <div class="term">
+          <div class="term-bar"><span class="lamp r"></span><span class="lamp y"></span><span class="lamp g"></span></div>
+<pre id="docker-cmd"><span class="cmt"># mount your own workspace folder</span>
+<span class="prompt">$</span> docker run -p 47821:47821 \
+    <span class="flag">-v</span> $(pwd)/my-api-workspace:/workspace \
+    ghcr.io/joaonunogomes/api-testing-client:<span class="url">latest</span></pre>
+        </div>
+        <button class="copy" id="copy-btn" type="button">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span id="copy-label">Copy command</span>
+        </button>
+        <p class="open-url">Then open <code>http://localhost:47821</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FINAL CTA ================= -->
+<section class="final">
+  <div class="wrap">
+    <h2>Keep your requests where your code lives.</h2>
+    <p>Free, MIT-licensed, and self-hosted. Your API workspace is a folder of YAML — nothing more, nothing you can't read.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/joaonunogomes/api-testing-client/releases" target="_blank" rel="noopener">Download the app</a>
+      <a class="btn btn-ghost" href="https://github.com/joaonunogomes/api-testing-client" target="_blank" rel="noopener">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.22-3.37-1.22-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.05 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.32 9.32 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.92-2.34 4.78-4.57 5.03.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.03 10.03 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+        Star on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span class="brand"><img src="assets/icon.svg" alt="" style="width:26px;height:26px;border-radius:7px" /> API Client</span>
+    <span>Released under the MIT License.</span>
+    <div class="foot-links">
+      <a href="https://github.com/joaonunogomes/api-testing-client">GitHub</a>
+      <a href="https://github.com/joaonunogomes/api-testing-client/releases">Releases</a>
+      <a href="https://github.com/joaonunogomes/api-testing-client#readme">Docs</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Copy the docker command — the one action on the page, so give it real feedback.
+  (function(){
+    var btn = document.getElementById('copy-btn');
+    var label = document.getElementById('copy-label');
+    if(!btn) return;
+    var cmd = 'docker run -p 47821:47821 \\\n  -v $(pwd)/my-api-workspace:/workspace \\\n  ghcr.io/joaonunogomes/api-testing-client:latest';
+    btn.addEventListener('click', function(){
+      navigator.clipboard.writeText(cmd).then(function(){
+        label.textContent = 'Copied';
+        setTimeout(function(){ label.textContent = 'Copy command'; }, 1600);
+      }).catch(function(){
+        label.textContent = 'Press Ctrl+C';
+      });
+    });
+  })();
+</script>
+</body>
+</html>
