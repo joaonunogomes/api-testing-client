@@ -41,7 +41,7 @@ If you've ever wanted your API requests to live *next to* the code they test, th
 - **Authentication** — Basic, Bearer, API Key, and OAuth 2.0 (Authorization Code, PKCE, Client Credentials, Password, Refresh Token)
 - **Variable substitution** — Use `{{variables}}` in URLs, headers, body, and auth fields
 - **Dynamic variables** — `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`, `{{$randomCompanyName}}`
-- **Scripts & tests** — Pre-request and post-response JavaScript with assertions via `bru.test()`
+- **Scripts & tests** — Pre-request and post-response JavaScript with assertions via `ac.test()`
 - **Collection import** — Import existing collections and environments (v2.1 format), converted to native YAML
 - **OpenAPI import** — Import OpenAPI 3.x / Swagger 2.0 specs (JSON or YAML) from file or URL
 - **Live reload** — Edit a YAML file in your editor and the UI updates instantly (Server-Sent Events)
