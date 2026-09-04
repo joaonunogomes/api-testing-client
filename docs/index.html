@@ -48,7 +48,8 @@
   }
 
   *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
+  html{scroll-behavior:smooth;overflow-x:hidden}
+  body{overflow-x:hidden}
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 
   body{
@@ -188,20 +189,19 @@
   .shot img{width:100%;display:block}
   .shot-cap{padding:14px 18px;font-size:14px;color:var(--muted);border-top:1px solid var(--surface2);font-family:"JetBrains Mono"}
   .shot-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}
-  @media (max-width:760px){.shot-row{grid-template-columns:1fr}}
   .shot-row .shot{margin-top:0}
 
   /* ---------- install ---------- */
   .install{background:var(--mantle);border-top:1px solid var(--surface2);border-bottom:1px solid var(--surface2)}
   .install-grid{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:48px}
-  .card{background:var(--base);border:1px solid var(--surface2);border-radius:16px;padding:28px}
+  .card{background:var(--base);border:1px solid var(--surface2);border-radius:16px;padding:28px;min-width:0}
   .card h3{font-family:"Inter";font-size:19px;font-weight:600;letter-spacing:0;display:flex;align-items:center;gap:10px}
   .card h3 svg{width:22px;height:22px;color:var(--blue)}
   table.plat{width:100%;border-collapse:collapse;margin-top:18px;font-size:14.5px}
   table.plat td{padding:11px 0;border-top:1px solid var(--surface2);color:var(--subtext)}
   table.plat td:first-child{color:var(--text);font-weight:500}
   table.plat td:last-child{text-align:right;font-family:"JetBrains Mono";font-size:13px;color:var(--muted)}
-  .term{margin-top:18px;background:#13131d;border:1px solid var(--surface2);border-radius:12px;overflow:hidden}
+  .term{margin-top:18px;background:#13131d;border:1px solid var(--surface2);border-radius:12px;overflow:hidden;min-width:0}
   .term-bar{display:flex;gap:7px;padding:11px 14px;border-bottom:1px solid var(--surface2)}
   .term pre{margin:0;padding:16px 18px;font-family:"JetBrains Mono";font-size:13px;line-height:1.7;overflow-x:auto;color:var(--text)}
   .term .prompt{color:var(--green)}
@@ -235,16 +235,44 @@
     .install-grid{grid-template-columns:1fr}
     .feat-grid{grid-template-columns:1fr 1fr}
     .nav-links{display:none}
+    h1.title{max-width:20ch}
+    .lede{max-width:none}
+  }
+  /* the hero file<->response panel gets too cramped as two code columns;
+     stack it (and its arrows) well before phone widths */
+  @media (max-width:760px){
+    .split{grid-template-columns:1fr}
+    .arrows{flex-direction:row;justify-content:center;border-left:none;border-right:none;border-top:1px solid var(--surface2);border-bottom:1px solid var(--surface2);padding:10px}
+    .arrows svg{transform:rotate(90deg)}
+    .shot-row{grid-template-columns:1fr}
   }
   @media (max-width:640px){
     body{font-size:16px}
+    .wrap{padding:0 18px}
     .hero{padding:52px 0 24px}
     section{padding:64px 0}
+    .final{padding:76px 0}
     .feat-grid{grid-template-columns:1fr}
-    .split{grid-template-columns:1fr;}
-    .arrows{flex-direction:row;justify-content:center;border-left:none;border-right:none;border-top:1px solid var(--surface2);border-bottom:1px solid var(--surface2);padding:10px}
-    .arrows svg{transform:rotate(90deg)}
-    .foot-links{margin-left:0;flex-basis:100%}
+    .foot-inner{gap:10px}
+    .foot-links{margin-left:0;flex-basis:100%;gap:18px}
+    .card{padding:22px}
+  }
+  @media (max-width:480px){
+    .wrap{padding:0 14px}
+    .nav-inner{gap:10px;height:60px}
+    .brand{font-size:16px;gap:9px}
+    .brand img{width:26px;height:26px}
+    .nav-right{gap:8px}
+    .btn{padding:9px 13px;font-size:14px}
+    /* GitHub button collapses to icon-only, Download stays the visible CTA */
+    .nav-right .btn-ghost .btn-label{display:none}
+    .nav-right .btn-ghost{padding:9px 11px}
+    .hero{padding:40px 0 20px}
+    .lede{font-size:16.5px}
+    .cta-row{gap:10px}
+    .cta-row .btn{flex:1 1 auto;justify-content:center}
+    .panel-bar .fname{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    pre.code,.diff pre,.term pre{font-size:12px}
   }
 </style>
 </head>
@@ -262,7 +290,7 @@
     <div class="nav-right">
       <a class="btn btn-ghost" href="https://github.com/joaonunogomes/api-testing-client" target="_blank" rel="noopener">
         <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.22-3.37-1.22-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.05 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.32 9.32 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.92-2.34 4.78-4.57 5.03.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.03 10.03 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
-        GitHub
+        <span class="btn-label">GitHub</span>
       </a>
       <a class="btn btn-primary" href="https://github.com/joaonunogomes/api-testing-client/releases" target="_blank" rel="noopener">Download</a>
     </div>
