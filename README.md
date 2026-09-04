@@ -10,13 +10,7 @@ Git-friendly. Diff-friendly. No accounts, no cloud sync, no vendor lock-in.
 
 </div>
 
-<!--
-  SCREENSHOT PLACEHOLDER — hero shot of the app.
-  Drop an image at assets/screenshots/overview.png and uncomment the line below.
--->
-<!-- <div align="center"><img src="assets/screenshots/overview.png" alt="API Client overview" width="820" /></div> -->
-
-> 📸 _Screenshot coming soon — add `assets/screenshots/overview.png`._
+<div align="center"><img src="assets/screenshots/demo.gif" alt="API Client demo" width="820" /></div>
 
 ---
 
@@ -91,15 +85,13 @@ my-workspace/
 └── environments/    # dev / staging / prod variable sets
 ```
 
-<!-- SCREENSHOT PLACEHOLDER — the sidebar / workspace tree. assets/screenshots/workspace.png -->
-> 📸 _Screenshot placeholder — `assets/screenshots/workspace.png`._
+<div align="center"><img src="assets/screenshots/workspace.png" alt="Workspace collections sidebar" width="320" /></div>
 
 ### 2. Send your first request
 
 Create a request, pick a method, type a URL, and hit **Send**. Use `{{variables}}` anywhere (URL, headers, body, auth) and they'll resolve from the active environment.
 
-<!-- SCREENSHOT PLACEHOLDER — a request + response view. assets/screenshots/request.png -->
-> 📸 _Screenshot placeholder — `assets/screenshots/request.png`._
+<div align="center"><img src="assets/screenshots/request.png" alt="Sending a request and viewing the response" width="820" /></div>
 
 ### 3. Set up environments
 
