@@ -47,6 +47,8 @@ If you've ever wanted your API requests to live *next to* the code they test, th
 
 ## Install
 
+> For full installation instructions and downloads, see the [**website**](https://joaonunogomes.github.io/api-testing-client/#install).
+
 ### Desktop app
 
 Download the latest installer from the [**Releases**](../../releases) page:
